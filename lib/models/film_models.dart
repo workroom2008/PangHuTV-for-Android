@@ -142,6 +142,7 @@ class SearchSourceTab {
 class BannerItem {
   final String id;
   final int mid;
+  final String sourceId;
   final String name;
   final String year;
   final String cName;
@@ -155,6 +156,7 @@ class BannerItem {
   BannerItem({
     required this.id,
     required this.mid,
+    this.sourceId = '',
     required this.name,
     this.year = '',
     this.cName = '',

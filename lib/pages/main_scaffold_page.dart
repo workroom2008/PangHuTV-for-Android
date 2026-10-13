@@ -7,6 +7,7 @@ import '../services/app_catalog_service.dart';
 import '../services/auth_session.dart';
 import '../utils/server_config_manager.dart';
 import '../utils/site_heartbeat.dart';
+import '../utils/collect_source_scope.dart';
 import '../utils/source_guard.dart';
 import '../utils/app_version_util.dart';
 import '../api/http_client.dart';
@@ -169,6 +170,10 @@ class _MainScaffoldPageState extends State<MainScaffoldPage> with WidgetsBinding
     }
     try {
       await AppCatalogService.instance.refresh();
+      await CollectSourceScope.instance.ensureLoaded();
+      CollectSourceScope.instance.syncFromCatalog(
+        AppCatalogService.instance.collectSources.map((e) => e.id).toList(),
+      );
     } catch (_) {}
 
     await _loadSite(false);

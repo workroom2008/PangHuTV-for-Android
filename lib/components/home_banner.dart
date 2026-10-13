@@ -4,7 +4,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../common/app_theme.dart';
 import '../models/film_models.dart';
 import '../utils/breakpoint.dart';
+import '../utils/collect_source_scope.dart';
 import '../utils/format_util.dart';
+import '../utils/nav_util.dart';
 import '../utils/server_config_manager.dart';
 
 /// 首页 Banner，对齐 OHOS `HomeBanner.ets`
@@ -115,7 +117,12 @@ class _HomeBannerState extends State<HomeBanner> {
 
   void _openPlay(BannerItem item) {
     final id = item.mid > 0 ? '${item.mid}' : item.id;
-    Navigator.pushNamed(context, '/play', arguments: {'id': id});
+    if (id.isEmpty) return;
+    var sourceId = item.sourceId.trim();
+    if (sourceId.isEmpty) {
+      sourceId = CollectSourceScope.instance.activeId;
+    }
+    NavUtil.openPlay(context, id, sourceId: sourceId);
   }
 
   Widget _backdrop(BannerItem item, {required bool round}) {

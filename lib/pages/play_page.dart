@@ -470,12 +470,21 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
       playingSourceId: _playingSourceId,
       viewingSourceId: _viewingSourceId,
       episodeIndex: _episodeIndex,
-      onViewSource: (id) => setState(() => _viewingSourceId = id),
+      onViewSource: (id) {
+        if (id.isEmpty) return;
+        final source = _findSource(id);
+        if (source == null || source.linkList.isEmpty) {
+          setState(() => _viewingSourceId = id);
+          return;
+        }
+        final epIdx = id == _playingSourceId ? _episodeIndex : 0;
+        _selectEpisode(id, epIdx.clamp(0, source.linkList.length - 1));
+      },
       onSelectEpisode: (sourceId, index) => _selectEpisode(sourceId, index),
       relateLoading: _relateLoading,
       related: _related,
       onOpenRelated: _openRelated,
-      sourceName: '',
+      sourceName: _sourceName,
     );
   }
 }

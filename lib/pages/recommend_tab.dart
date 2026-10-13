@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../common/app_theme.dart';
 import '../models/film_models.dart';
 import '../utils/breakpoint.dart';
+import '../utils/collect_source_scope.dart';
 import '../utils/source_guard.dart';
 import '../api/film_api.dart';
 import '../models/app_catalog.dart';
@@ -41,9 +42,9 @@ class _RecommendTabState extends State<RecommendTab> {
   String _errorText = '';
   double _headerAlpha = 0;
   int _reloadToken = 0;
-  String _collectSourceId = '';
   List<CollectSourceOption> _collectSources = [];
   final ScrollController _scrollController = ScrollController();
+  final _sourceScope = CollectSourceScope.instance;
 
   @override
   void initState() {
@@ -51,18 +52,27 @@ class _RecommendTabState extends State<RecommendTab> {
     FavoriteManager.preload();
     _scrollController.addListener(_onScroll);
     SourceGuard.onReconnect(_onReconnect);
+    _sourceScope.addListener(_onSourceScopeChanged);
+    _boot();
+  }
+
+  Future<void> _boot() async {
+    await _sourceScope.ensureLoaded();
     _reloadCatalog();
+    _loadHome(fromPull: false);
+  }
+
+  void _onSourceScopeChanged() {
+    if (!mounted) return;
+    setState(() {});
     _loadHome(fromPull: false);
   }
 
   void _reloadCatalog() {
     final list = AppCatalogService.instance.collectSources;
+    CollectSourceScope.instance.syncFromCatalog(list.map((e) => e.id).toList());
     setState(() {
       _collectSources = list;
-      if (_collectSourceId.isNotEmpty &&
-          !list.any((e) => e.id == _collectSourceId)) {
-        _collectSourceId = '';
-      }
     });
   }
 
@@ -70,6 +80,7 @@ class _RecommendTabState extends State<RecommendTab> {
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _sourceScope.removeListener(_onSourceScopeChanged);
     SourceGuard.offReconnect(_onReconnect);
     super.dispose();
   }
@@ -81,9 +92,7 @@ class _RecommendTabState extends State<RecommendTab> {
   }
 
   void _selectCollectSource(String id) {
-    if (_collectSourceId == id) return;
-    setState(() => _collectSourceId = id);
-    _loadHome(fromPull: false);
+    _sourceScope.pick(id);
   }
 
   void _onScroll() {
@@ -120,7 +129,7 @@ class _RecommendTabState extends State<RecommendTab> {
     }
     var ok = false;
     try {
-      final home = await FilmApi.getHome(sourceId: _collectSourceId);
+      final home = await FilmApi.getHome(sourceId: _sourceScope.activeId);
       if (!mounted) return;
       setState(() {
         _banners = home.banners;
@@ -197,7 +206,7 @@ class _RecommendTabState extends State<RecommendTab> {
         ),
         child: Row(
           children: chips.map((c) {
-            final active = _collectSourceId == c.id;
+            final active = _sourceScope.activeId == c.id;
             return Padding(
               padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(

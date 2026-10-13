@@ -34,11 +34,13 @@ class FilmApi {
     int pid,
     int current, {
     int pageSize = 21,
+    String sourceId = '',
   }) async {
     final params = {
       'pid': pid,
       'current': current,
       'pageSize': pageSize,
+      if (sourceId.trim().isNotEmpty) 'source': sourceId.trim(),
     };
     final res = await HttpClient.instance.get('/dailyUpdates', params: params);
     if (res.code != 0 || res.data == null) {

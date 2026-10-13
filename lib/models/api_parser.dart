@@ -124,6 +124,7 @@ class ApiParser {
     return BannerItem(
       id: str(map, 'id'),
       mid: intVal(map, 'mid'),
+      sourceId: str(map, 'sourceId'),
       name: str(map, 'name'),
       year: FormatUtil.year(str(map, 'year')),
       cName: str(map, 'cName'),

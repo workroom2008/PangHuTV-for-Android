@@ -19,6 +19,7 @@ class DailyUpdatePane extends StatefulWidget {
   final PageInfo? seedPage;
   final int reloadToken;
   final double headerHeight;
+  final String collectSourceId;
   final VoidCallback? onAllRefreshed;
 
   const DailyUpdatePane({
@@ -30,6 +31,7 @@ class DailyUpdatePane extends StatefulWidget {
     this.seedPage,
     this.reloadToken = 0,
     this.headerHeight = 0,
+    this.collectSourceId = '',
     this.onAllRefreshed,
   });
 
@@ -61,7 +63,8 @@ class _DailyUpdatePaneState extends State<DailyUpdatePane> with AutomaticKeepAli
   @override
   void didUpdateWidget(covariant DailyUpdatePane oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.reloadToken != oldWidget.reloadToken) {
+    if (widget.reloadToken != oldWidget.reloadToken ||
+        widget.collectSourceId != oldWidget.collectSourceId) {
       _hasLoaded = false;
       _boot();
     } else if (widget.active && !_hasLoaded) {
@@ -170,7 +173,12 @@ class _DailyUpdatePaneState extends State<DailyUpdatePane> with AutomaticKeepAli
 
     var ok = false;
     try {
-      final res = await FilmApi.getDailyUpdates(widget.pid, nextPage, pageSize: _pageSize);
+      final res = await FilmApi.getDailyUpdates(
+        widget.pid,
+        nextPage,
+        pageSize: _pageSize,
+        sourceId: widget.collectSourceId,
+      );
       if (!mounted) return;
       setState(() {
         _films = reset ? res.list : [..._films, ...res.list];

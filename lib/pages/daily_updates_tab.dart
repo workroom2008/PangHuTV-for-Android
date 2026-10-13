@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../common/app_theme.dart';
 import '../models/film_models.dart';
 import '../api/film_api.dart';
+import '../utils/collect_source_scope.dart';
 import '../utils/source_guard.dart';
+import '../models/app_catalog.dart';
+import '../services/app_catalog_service.dart';
 import '../utils/breakpoint.dart';
 import '../components/loading_view.dart';
 import '../components/empty_state.dart';
@@ -39,6 +42,8 @@ class _DailyUpdatesTabState extends State<DailyUpdatesTab> with TickerProviderSt
   final ScrollController _chipsScroller = ScrollController();
   List<GlobalKey> _chipKeys = [];
   VoidCallback? _reconnectCb;
+  final _sourceScope = CollectSourceScope.instance;
+  List<CollectSourceOption> _collectSources = [];
 
   @override
   void initState() {
@@ -47,16 +52,45 @@ class _DailyUpdatesTabState extends State<DailyUpdatesTab> with TickerProviderSt
     _pageController = PageController(initialPage: _currentIndex);
     _reconnectCb = () {
       FavoriteManager.preload();
+      _reloadCatalog();
       _loadMeta(fromPull: false);
     };
     SourceGuard.onReconnect(_reconnectCb!);
+    _sourceScope.addListener(_onSourceScopeChanged);
+    _boot();
+  }
+
+  Future<void> _boot() async {
+    await _sourceScope.ensureLoaded();
+    _reloadCatalog();
     if (!_hasLoaded) {
       _loadMeta(fromPull: false);
     }
   }
 
+  void _reloadCatalog() {
+    final list = AppCatalogService.instance.collectSources;
+    CollectSourceScope.instance.syncFromCatalog(list.map((e) => e.id).toList());
+    if (mounted) {
+      setState(() => _collectSources = list);
+    }
+  }
+
+  void _onSourceScopeChanged() {
+    if (!mounted) return;
+    setState(() {
+      _currentIndex = 0;
+      _siblingResetToken++;
+    });
+    _loadMeta(fromPull: false);
+    if (_pageController.hasClients) {
+      _pageController.jumpToPage(0);
+    }
+  }
+
   @override
   void dispose() {
+    _sourceScope.removeListener(_onSourceScopeChanged);
     if (_reconnectCb != null) {
       SourceGuard.offReconnect(_reconnectCb!);
     }
@@ -101,7 +135,12 @@ class _DailyUpdatesTabState extends State<DailyUpdatesTab> with TickerProviderSt
     });
 
     try {
-      final result = await FilmApi.getDailyUpdates(0, 1, pageSize: _pageSize);
+      final result = await FilmApi.getDailyUpdates(
+        0,
+        1,
+        pageSize: _pageSize,
+        sourceId: _sourceScope.activeId,
+      );
       var cats = result.categories;
       if (cats.isEmpty) {
         cats = [DailyUpdateCategory(pid: 0, name: '全部', count: result.page.total)];
@@ -197,10 +236,67 @@ class _DailyUpdatesTabState extends State<DailyUpdatesTab> with TickerProviderSt
   }
 
   double _headerHeight(double topInset, bool isWide, bool hasChips) {
-    if (!hasChips) {
-      return topInset + 48.0;
+    var h = topInset + 48.0;
+    if (_collectSources.length > 1) {
+      h += isWide ? 40 : 36;
     }
-    return topInset + (isWide ? 98.0 : 94.0);
+    if (hasChips) {
+      h += isWide ? 46 : 42;
+    }
+    return h;
+  }
+
+  Widget _buildSourceChips(bool isWide, double leftInset, double rightInset) {
+    final chips = <({String id, String name})>[
+      (id: '', name: '综合'),
+      ..._collectSources.map((s) => (id: s.id, name: s.name)),
+    ];
+    return Container(
+      height: isWide ? 36 : 32,
+      margin: const EdgeInsets.only(bottom: 4),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.only(
+          left: AppTheme.spaceLg + leftInset,
+          right: AppTheme.spaceLg + rightInset,
+        ),
+        child: Row(
+          children: [
+            for (final c in chips) ...[
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _sourceScope.pick(c.id),
+                child: Container(
+                  height: isWide ? 32 : 28,
+                  padding: EdgeInsets.symmetric(horizontal: isWide ? 14 : 12),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _sourceScope.activeId == c.id
+                        ? const Color(0x33FA8C16)
+                        : const Color(0x0DFFFFFF),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: _sourceScope.activeId == c.id
+                          ? AppTheme.accent
+                          : const Color(0x1AFFFFFF),
+                    ),
+                  ),
+                  child: Text(
+                    c.name,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: _sourceScope.activeId == c.id ? FontWeight.w600 : FontWeight.normal,
+                      color: _sourceScope.activeId == c.id ? AppTheme.accent : AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildChip(int index, DailyUpdateCategory item, bool isWide) {
@@ -349,6 +445,8 @@ class _DailyUpdatesTabState extends State<DailyUpdatesTab> with TickerProviderSt
                 ),
               ),
 
+              if (_collectSources.length > 1) _buildSourceChips(isWide, leftInset, rightInset),
+
               // Row 2: Category Chips
               if (hasChips)
                 Container(
@@ -442,7 +540,8 @@ class _DailyUpdatesTabState extends State<DailyUpdatesTab> with TickerProviderSt
           final cat = _categories[index];
           final active = (index - _currentIndex).abs() <= 1;
           final isSeed = cat.pid == _seedPid;
-          final paneKey = 'daily_pane_${cat.pid}_${_reloadToken}_${isSeed ? 0 : _siblingResetToken}';
+          final paneKey =
+              'daily_pane_${cat.pid}_${_sourceScope.activeId}_${_reloadToken}_${isSeed ? 0 : _siblingResetToken}';
           return DailyUpdatePane(
             key: ValueKey(paneKey),
             pid: cat.pid,
@@ -452,6 +551,7 @@ class _DailyUpdatesTabState extends State<DailyUpdatesTab> with TickerProviderSt
             seedPage: isSeed ? _seedPage : null,
             reloadToken: _reloadToken,
             headerHeight: headerHeight,
+            collectSourceId: _sourceScope.activeId,
             onAllRefreshed: _invalidateOtherPanes,
           );
         },
