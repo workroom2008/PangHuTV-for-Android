@@ -226,6 +226,27 @@ class HttpClient {
     return msg.isNotEmpty ? msg : '服务未启动或网关异常 (服务错误)';
   }
 
+  /// 媒体流（HLS/封面代理）请求头，不含 JSON Content-Type。
+  Future<Map<String, String>> mediaRequestHeaders() async {
+    final userAgent = await _resolveUserAgent();
+    final manager = ServerConfigManager.instance;
+    String deviceId = '';
+    try {
+      deviceId = await manager.getDeviceId();
+    } catch (_) {}
+    final token = AuthSession.instance.token.trim();
+    final provideKey = manager.provideKey;
+    return {
+      'Accept': '*/*',
+      'User-Agent': userAgent,
+      if (deviceId.isNotEmpty) 'X-Device-Id': deviceId,
+      if (deviceId.isNotEmpty) 'Device-Id': deviceId,
+      if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+      if (token.isNotEmpty) 'Token': token,
+      if (token.isEmpty && provideKey.isNotEmpty) 'X-Provide-Key': provideKey,
+    };
+  }
+
   Future<Map<String, String>> _authHeaders(String userAgent) async {
     final manager = ServerConfigManager.instance;
     String deviceId = '';

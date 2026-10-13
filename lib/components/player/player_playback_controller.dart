@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import '../../api/http_client.dart';
+import '../../utils/playback_url.dart';
 import 'player_gesture_handler.dart';
 import 'player_speed.dart';
 import 'player_scale.dart';
@@ -126,14 +128,14 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     if (sessionId != _initSessionId) return;
     _hasSeekedInitial = false;
 
-    final url = videoUrl.trim();
+    final url = PlaybackUrl.prepareForPlayer(videoUrl);
     if (url.isEmpty) {
       watcher.clearOpenWatch();
       _isOpening = false;
       _isBuffering = false;
       _isPlaying = false;
       _playRequested = false;
-      _errorText = '';
+      _errorText = videoUrl.trim().isNotEmpty ? '暂无可用播放地址' : '';
       notifyListeners();
       onStateChanged?.call();
       return;
@@ -155,7 +157,13 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
 
     VideoPlayerController? newController;
     try {
-      newController = VideoPlayerController.networkUrl(Uri.parse(url));
+      final uri = Uri.parse(url);
+      if (PlaybackUrl.needsServerApiAuth(url)) {
+        final httpHeaders = await HttpClient.instance.mediaRequestHeaders();
+        newController = VideoPlayerController.networkUrl(uri, httpHeaders: httpHeaders);
+      } else {
+        newController = VideoPlayerController.networkUrl(uri);
+      }
       await newController.initialize();
       if (sessionId != _initSessionId) {
         newController.dispose().catchError((_) {});

@@ -193,7 +193,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
         _playUrl = info.current.link;
         _playTitle = '${detail.name} · ${info.current.episode}';
         _sourceName = _findSource(_playingSourceId)?.name ?? '默认源';
-        _errorText = '';
+        _errorText = _playUrl.trim().isEmpty ? '暂无可用播放地址，请切换线路或稍后重试' : '';
         _loading = false;
         _persistEnabled = true;
       });

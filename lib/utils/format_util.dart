@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/film_models.dart';
 import 'play_navigation.dart';
-import 'server_config_manager.dart';
+import 'playback_url.dart';
 
 /// 统一格式化工具类
 class FormatUtil {
@@ -68,7 +68,7 @@ class FormatUtil {
     } else if (film.pictureSlide.isNotEmpty) {
       raw = film.pictureSlide;
     }
-    return ServerConfigManager.instance.resolveMediaUrl(raw);
+    return PlaybackUrl.prepareMediaUrl(raw);
   }
 
   static String bannerPoster(BannerItem item) {
@@ -80,7 +80,7 @@ class FormatUtil {
     } else if (item.pictureSlide.isNotEmpty) {
       raw = item.pictureSlide;
     }
-    return ServerConfigManager.instance.resolveMediaUrl(raw);
+    return PlaybackUrl.prepareMediaUrl(raw);
   }
 
   static String bannerBackdrop(BannerItem item) {
@@ -92,7 +92,7 @@ class FormatUtil {
     } else if (item.poster.isNotEmpty) {
       raw = item.poster;
     }
-    return ServerConfigManager.instance.resolveMediaUrl(raw);
+    return PlaybackUrl.prepareMediaUrl(raw);
   }
 
   static String filmId(MovieBasicInfo film) {
@@ -108,6 +108,7 @@ class FormatUtil {
 
   /// 根据图片 URL 动态生成防盗链与兼容性请求头（如 Bilibili、豆瓣等）
   static Map<String, String> imageHeaders(String url) {
+    url = PlaybackUrl.prepareMediaUrl(url);
     final uri = Uri.tryParse(url);
     if (uri == null) {
       return const {
