@@ -45,21 +45,15 @@ class _AboutPageState extends State<AboutPage> {
 
   static const List<_ProjectLinkItem> _projectLinks = [
     _ProjectLinkItem(
-      title: 'EcoHub 开源项目',
+      title: '胖虎影视（PangHuTV）',
       desc: '服务端、Web 管理后台与前台源码',
-      url: 'https://github.com/fe-spark/EcoHub',
+      url: 'https://github.com/workroom2008/PangHuTV',
       icon: Icons.language_rounded,
-    ),
-    _ProjectLinkItem(
-      title: 'EcoHub for OHOS',
-      desc: 'HarmonyOS NEXT 原生客户端源码',
-      url: 'https://github.com/fe-spark/EcoHub-for-OHOS',
-      icon: Icons.phone_iphone_rounded,
     ),
     _ProjectLinkItem(
       title: 'EcoHub for Android',
       desc: 'Android 客户端应用源码',
-      url: 'https://github.com/fe-spark/EcoHub-for-Android',
+      url: 'https://github.com/workroom2008/EcoHub-for-Android',
       icon: Icons.phone_android_rounded,
     ),
     _ProjectLinkItem(
@@ -438,7 +432,7 @@ class _AboutPageState extends State<AboutPage> {
                                   ),
                                   SizedBox(height: 4),
                                   Text(
-                                    'Copyright © 2026 fe-spark. All Rights Reserved.',
+                                    'Copyright © 2026 workroom2008. All Rights Reserved.',
                                     style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
                                   ),
                                 ],

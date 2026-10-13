@@ -236,17 +236,17 @@ void main() {
   group('ServerConfigManager Tests', () {
     test('normalizeRaw and stripApiSuffix', () {
       final manager = ServerConfigManager.instance;
-      expect(manager.normalizeRaw('eco.fe-spark.cn'), 'https://eco.fe-spark.cn');
-      expect(manager.normalizeRaw('http://eco.fe-spark.cn/'), 'http://eco.fe-spark.cn');
-      expect(ServerConfigManager.stripApiSuffix('https://eco.fe-spark.cn/api'), 'https://eco.fe-spark.cn');
-      expect(ServerConfigManager.stripApiSuffix('https://eco.fe-spark.cn/api/'), 'https://eco.fe-spark.cn');
-      expect(ServerConfigManager.stripApiSuffix('https://eco.fe-spark.cn/api/provide/app'), 'https://eco.fe-spark.cn');
-      expect(ServerConfigManager.stripApiSuffix('https://eco.fe-spark.cn/api/provide/app/'), 'https://eco.fe-spark.cn');
-      expect(ServerConfigManager.extractProvideKey('https://eco.fe-spark.cn/api/provide/app?key=mykey'), 'mykey');
-      expect(ServerConfigManager.stripProvideKey('https://eco.fe-spark.cn/api/provide/app?key=mykey'), 'https://eco.fe-spark.cn/api/provide/app');
-      expect(ServerConfigManager.buildServerUrl('https://eco.fe-spark.cn/api/provide/app', 'mykey'), 'https://eco.fe-spark.cn/api/provide/app?key=mykey');
-      expect(ServerConfigManager.buildServerUrl('https://eco.fe-spark.cn/api/provide/app?key=oldkey', 'mykey'), 'https://eco.fe-spark.cn/api/provide/app?key=mykey');
-      expect(ServerConfigManager.buildServerUrl('https://eco.fe-spark.cn/api/provide/app', ''), 'https://eco.fe-spark.cn/api/provide/app');
+      expect(manager.normalizeRaw('demo.example.com'), 'https://demo.example.com');
+      expect(manager.normalizeRaw('http://demo.example.com/'), 'http://demo.example.com');
+      expect(ServerConfigManager.stripApiSuffix('https://demo.example.com/api'), 'https://demo.example.com');
+      expect(ServerConfigManager.stripApiSuffix('https://demo.example.com/api/'), 'https://demo.example.com');
+      expect(ServerConfigManager.stripApiSuffix('https://demo.example.com/api/provide/app'), 'https://demo.example.com');
+      expect(ServerConfigManager.stripApiSuffix('https://demo.example.com/api/provide/app/'), 'https://demo.example.com');
+      expect(ServerConfigManager.extractProvideKey('https://demo.example.com/api/provide/app?key=mykey'), 'mykey');
+      expect(ServerConfigManager.stripProvideKey('https://demo.example.com/api/provide/app?key=mykey'), 'https://demo.example.com/api/provide/app');
+      expect(ServerConfigManager.buildServerUrl('https://demo.example.com/api/provide/app', 'mykey'), 'https://demo.example.com/api/provide/app?key=mykey');
+      expect(ServerConfigManager.buildServerUrl('https://demo.example.com/api/provide/app?key=oldkey', 'mykey'), 'https://demo.example.com/api/provide/app?key=mykey');
+      expect(ServerConfigManager.buildServerUrl('https://demo.example.com/api/provide/app', ''), 'https://demo.example.com/api/provide/app');
     });
 
     test('testConnection empty url returns invalid message', () async {
@@ -584,8 +584,8 @@ void main() {
   group('ServerConfigPage Tests', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({
-        'server_url': 'https://eco.fe-spark.cn/api',
-        'server_history': <String>['https://eco.fe-spark.cn/api'],
+        'server_url': 'https://demo.example.com/api',
+        'server_history': <String>['https://demo.example.com/api'],
       });
     });
 

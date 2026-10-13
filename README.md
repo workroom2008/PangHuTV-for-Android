@@ -1,23 +1,23 @@
 # EcoHub for Android
 
-[![Release](https://img.shields.io/github/v/release/fe-spark/EcoHub-for-Android)](https://github.com/fe-spark/EcoHub-for-Android/releases)
-[![Download APK](https://img.shields.io/badge/Download-.apk-green?logo=android&logoColor=white)](https://github.com/fe-spark/EcoHub-for-Android/releases/latest)
+[![Release](https://img.shields.io/github/v/release/workroom2008/EcoHub-for-Android)](https://github.com/workroom2008/EcoHub-for-Android/releases)
+[![Download APK](https://img.shields.io/badge/Download-.apk-green?logo=android&logoColor=white)](https://github.com/workroom2008/EcoHub-for-Android/releases/latest)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white)](https://flutter.dev/)
 
-[EcoHub](https://github.com/fe-spark/EcoHub) 的 Android 原生客户端（基于 Flutter 构建）。
+[EcoHub](https://github.com/workroom2008/PangHuTV) 的 Android 原生客户端（基于 Flutter 构建）。
 
 > **提示**：本仓库是 EcoHub 的纯客户端应用，**本身不提供、不存储任何影视资源**。安装后需配置 **服务端地址** 并用网站账号登录后方可浏览与观影。
 > 
-> 相关项目：[EcoHub 主仓库（服务端 + Web）](https://github.com/fe-spark/EcoHub) · 移动端仅维护 **Android / iOS**（本 Flutter 工程）
+> 相关项目：[EcoHub 主仓库（服务端 + Web）](https://github.com/workroom2008/PangHuTV) · 移动端仅维护 **Android / iOS**（本 Flutter 工程）
 
 ---
 
 ## 📥 下载安装
 
-- 🚀 **[下载最新版本 APK (Releases Latest)](https://github.com/fe-spark/EcoHub-for-Android/releases/latest)**
+- 🚀 **[下载最新版本 APK (Releases Latest)](https://github.com/workroom2008/EcoHub-for-Android/releases/latest)**
   - 现代主流 Android 手机请下载 `*-arm64-v8a.apk`（体积更小）
   - 较老机型请下载 `*-armeabi-v7a.apk`
-- 📜 **[查看所有历史版本与更新日志](https://github.com/fe-spark/EcoHub-for-Android/releases)**
+- 📜 **[查看所有历史版本与更新日志](https://github.com/workroom2008/EcoHub-for-Android/releases)**
 
 ---
 
@@ -28,7 +28,7 @@
 ### 1. 服务端从哪来？
 
 - **自建部署（推荐）**  
-  按照 [EcoHub 部署指南](https://github.com/fe-spark/EcoHub/blob/main/docs/README-Deploy.md) 在你的服务器上部署 EcoHub 服务端。  
+  按照 [EcoHub 部署指南](https://github.com/workroom2008/PangHuTV/blob/main/docs/README-Deploy.md) 在你的服务器上部署 EcoHub 服务端。  
   部署成功后，在管理后台「工作台」点击「订阅地址」即可获取客户端订阅源：
   ```
   http://<你的服务器IP或域名>:3000/api/provide/app
@@ -36,7 +36,7 @@
   *(若配置了 HTTPS 或反向代理，格式为 `https://<你的域名>/api/provide/app`，亦兼容原 `/api` 路径)*。在管理后台完成影视数据采集后，客户端即可直接同步。
 
 - **使用公共源 / 他人分享源**  
-  如果你有朋友已经部署了 EcoHub 站点，或使用社区公开的 EcoHub 节点，可直接获取其服务端根地址填入（演示：`https://eco.fe-spark.cn`）。
+  如果你有朋友已经部署了 EcoHub 站点，或使用社区公开的 EcoHub 节点，可直接获取其服务端根地址填入（填入你部署的服务端根地址即可）。
 
 ### 2. 如何在 App 中配置？
 
@@ -107,4 +107,4 @@ flutter build apk --release --split-per-abi
 
 ## 📄 开源许可
 
-本项目遵循 [PolyForm Noncommercial 1.0.0](https://github.com/fe-spark/EcoHub/blob/main/LICENSE) 协议。
+本项目遵循 [PolyForm Noncommercial 1.0.0](https://github.com/workroom2008/PangHuTV/blob/main/LICENSE) 协议。

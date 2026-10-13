@@ -632,7 +632,7 @@ SOAP 实现用现有 `http` 包即可，**不引入 Cling**。协议以 OHOS 源
 
 ### 11. 我的 / 版本 / 公告
 
-- 版本检查 GitHub：OHOS `fe-spark/EcoHub-for-OHOS` 找 `.hap`；Android 已指向 `EcoHub-for-Android` 找 `.apk`（正确平台差异）。
+- 版本检查 GitHub：Android 指向 `workroom2008/EcoHub-for-Android` 找 `.apk`。
 - **营销版本**：Android 保持 `1.0.x` 独立线，**不**升到 OHOS `1.3.1`。公告 `noticeAppVersion` 按 Android `versionName` 匹配；运营按 1.0.x 投放。
 - Android `compareVersion` **未比较 pre-release 后缀**（OHOS 1.1.5 > 1.1.5-beta）；PR2 移植。
 - `isVersionMatched`：Android 未 `normalizeVersion`（去 v 前缀）；PR2 补。
