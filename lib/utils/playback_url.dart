@@ -65,14 +65,21 @@ class PlaybackUrl {
 
   static String appendPrivateAccessQuery(String url) {
     if (!needsServerApiAuth(url)) return url;
-    // 账号登录时走 Bearer，与 API 一致；仅无 Token 时用软件源里的订阅密钥。
-    if (AuthSession.instance.token.trim().isNotEmpty) return url;
-    final key = ServerConfigManager.instance.provideKey.trim();
-    if (key.isEmpty) return url;
     final uri = Uri.tryParse(url);
     if (uri == null) return url;
-    if (uri.queryParameters.containsKey('key')) return url;
-    final q = Map<String, String>.from(uri.queryParameters)..['key'] = key;
+    final q = Map<String, String>.from(uri.queryParameters);
+    // ExoPlayer 对 m3u8 内嵌 /api/hls 子请求不一定带 Header，登录态写入 ?token=。
+    final token = AuthSession.instance.token.trim();
+    if (token.isNotEmpty && !q.containsKey('token')) {
+      q['token'] = token;
+    }
+    if (token.isEmpty) {
+      final key = ServerConfigManager.instance.provideKey.trim();
+      if (key.isNotEmpty && !q.containsKey('key')) {
+        q['key'] = key;
+      }
+    }
+    if (q.length == uri.queryParameters.length) return url;
     return uri.replace(queryParameters: q).toString();
   }
 
