@@ -342,7 +342,7 @@ void main() {
         releaseName: 'v1.0.1',
         releaseNotes: '稳定性优化',
         downloadUrl: 'https://example.com/update.apk',
-        releaseUrl: 'https://github.com/workroom2008/EcoHub-for-Android/releases/tag/v1.0.1',
+        releaseUrl: 'https://github.com/workroom2008/PangHuTV-for-Android/releases/tag/v1.0.1',
       );
 
       await tester.pumpWidget(
@@ -362,7 +362,7 @@ void main() {
       await tester.tap(find.text('前往更新'));
       await tester.pumpAndSettle();
 
-      expect(mockPlatform.launchedUrl, 'https://github.com/workroom2008/EcoHub-for-Android/releases/tag/v1.0.1');
+      expect(mockPlatform.launchedUrl, 'https://github.com/workroom2008/PangHuTV-for-Android/releases/tag/v1.0.1');
       expect(closed, isTrue);
     });
 

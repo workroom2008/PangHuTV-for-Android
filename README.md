@@ -1,7 +1,7 @@
 # 胖虎影视 for Android
 
-[![Release](https://img.shields.io/github/v/release/workroom2008/EcoHub-for-Android)](https://github.com/workroom2008/EcoHub-for-Android/releases)
-[![Download APK](https://img.shields.io/badge/Download-.apk-green?logo=android&logoColor=white)](https://github.com/workroom2008/EcoHub-for-Android/releases/latest)
+[![Release](https://img.shields.io/github/v/release/workroom2008/PangHuTV-for-Android)](https://github.com/workroom2008/PangHuTV-for-Android/releases)
+[![Download APK](https://img.shields.io/badge/Download-.apk-green?logo=android&logoColor=white)](https://github.com/workroom2008/PangHuTV-for-Android/releases/latest)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white)](https://flutter.dev/)
 
 [胖虎影视（PangHuTV）](https://github.com/workroom2008/PangHuTV) 的 Android 原生客户端（基于 Flutter 构建）。
@@ -14,10 +14,10 @@
 
 ## 📥 下载安装
 
-- 🚀 **[下载最新版本 APK (Releases Latest)](https://github.com/workroom2008/EcoHub-for-Android/releases/latest)**
+- 🚀 **[下载最新版本 APK (Releases Latest)](https://github.com/workroom2008/PangHuTV-for-Android/releases/latest)**
   - 现代主流 Android 手机请下载 `*-arm64-v8a.apk`（体积更小）
   - 较老机型请下载 `*-armeabi-v7a.apk`
-- 📜 **[查看所有历史版本与更新日志](https://github.com/workroom2008/EcoHub-for-Android/releases)**
+- 📜 **[查看所有历史版本与更新日志](https://github.com/workroom2008/PangHuTV-for-Android/releases)**
 
 ---
 

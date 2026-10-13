@@ -28,7 +28,7 @@ class AppUpdateInfo {
 /// 版本工具与检查器
 class AppVersionUtil {
   static const String appVersion = '1.0.2';
-  static const String latestReleaseUrl = 'https://github.com/workroom2008/EcoHub-for-Android/releases/latest';
+  static String get latestReleaseUrl => AppBranding.androidReleasesLatestUrl;
   static String _cachedVersionName = '';
   static AppUpdateInfo? _cachedUpdateInfo;
   static int _lastCheckTime = 0;
@@ -157,7 +157,7 @@ class AppVersionUtil {
 
     try {
       final res = await http.get(
-        Uri.parse('https://api.github.com/repos/workroom2008/EcoHub-for-Android/releases?per_page=10'),
+        AppBranding.androidReleasesApiUri,
         headers: {
           'Accept': 'application/vnd.github+json',
           'User-Agent': AppBranding.userAgentProduct,

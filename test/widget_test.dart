@@ -1992,7 +1992,7 @@ void main() {
       expect(find.text('在线演示站点'), findsNothing);
       expect(find.text('胖虎影视（PangHuTV）'), findsOneWidget);
       expect(find.text('胖虎影视 Android'), findsOneWidget);
-      expect(find.text('Telegram 交流群组'), findsOneWidget);
+      expect(find.text('Telegram 交流群组'), findsNothing);
     });
   });
 }

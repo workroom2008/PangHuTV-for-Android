@@ -44,24 +44,18 @@ class _AboutPageState extends State<AboutPage> {
     downloadUrl: '',
   );
 
-  static const List<_ProjectLinkItem> _projectLinks = [
+  static final List<_ProjectLinkItem> _projectLinks = [
     _ProjectLinkItem(
       title: '胖虎影视（PangHuTV）',
       desc: '服务端、Web 管理后台与前台源码',
-      url: 'https://github.com/workroom2008/PangHuTV',
+      url: AppBranding.serverRepoUrl,
       icon: Icons.language_rounded,
     ),
     _ProjectLinkItem(
       title: '胖虎影视 Android',
       desc: 'Android 客户端应用源码',
-      url: 'https://github.com/workroom2008/EcoHub-for-Android',
+      url: AppBranding.androidRepoUrl,
       icon: Icons.phone_android_rounded,
-    ),
-    _ProjectLinkItem(
-      title: 'Telegram 交流群组',
-      desc: '社区交流、反馈与动态探讨',
-      url: 'https://t.me/ecohub_club',
-      icon: Icons.chat_bubble_outline_rounded,
     ),
   ];
 
