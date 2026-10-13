@@ -94,7 +94,7 @@ void main() {
   });
 
   group('SplashPage Layout & Entry Pipeline Tests', () {
-    testWidgets('SplashPage renders StartIconImage and EcoHub title and replaces to server_config when no url', (tester) async {
+    testWidgets('SplashPage renders StartIconImage and 胖虎影视 title and replaces to server_config when no url', (tester) async {
       SharedPreferences.setMockInitialValues({});
       await ServerConfigManager.instance.init();
 
@@ -109,7 +109,7 @@ void main() {
       );
 
       // Initial frame renders splash UI
-      expect(find.text('EcoHub'), findsOneWidget);
+      expect(find.text('胖虎影视'), findsOneWidget);
       expect(find.text('正在接入服务...'), findsOneWidget);
 
       // Advance time beyond minSplashTime (800ms)
@@ -131,7 +131,7 @@ void main() {
               children: [
                 NoticeDialog(
                   title: '站点公告',
-                  content: '欢迎使用 EcoHub',
+                  content: '欢迎使用 胖虎影视',
                   onClose: () {
                     dismissed = true;
                   },
@@ -143,7 +143,7 @@ void main() {
       );
 
       expect(find.text('站点公告'), findsOneWidget);
-      expect(find.text('欢迎使用 EcoHub'), findsOneWidget);
+      expect(find.text('欢迎使用 胖虎影视'), findsOneWidget);
       expect(find.text('我知道了'), findsOneWidget);
 
       // Click "我知道了"

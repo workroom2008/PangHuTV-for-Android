@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'common/app_branding.dart';
 import 'common/app_theme.dart';
 import 'utils/app_orientation.dart';
 import 'utils/source_guard.dart';
@@ -101,7 +102,7 @@ class _EcoHubAppState extends State<EcoHubApp> with WidgetsBindingObserver {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: kDefaultSystemUiOverlayStyle,
       child: MaterialApp(
-        title: 'EcoHub',
+        title: AppBranding.displayName,
         debugShowCheckedModeBanner: false,
         navigatorKey: appNavigatorKey,
         navigatorObservers: [EcoHubRouteObserver()],

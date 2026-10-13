@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../common/app_branding.dart';
 import '../../types/dlna_types.dart';
 import '../../services/cast_session.dart';
 import 'player_cast_sheet.dart';
@@ -130,7 +131,13 @@ class PlayerCastController {
       _failRecast();
       return;
     }
-    session.replaceUri(host.videoUrl, host.title.isNotEmpty ? host.title : 'EcoHub', 0).then((_) {
+    session
+        .replaceUri(
+          host.videoUrl,
+          host.title.isNotEmpty ? host.title : AppBranding.defaultCastTitle,
+          0,
+        )
+        .then((_) {
       // recast ok
     }).catchError((_) {
       _failRecast();
@@ -284,7 +291,9 @@ class PlayerCastController {
     PlayerCastSheet.show(
       context,
       mediaUrl: url,
-      mediaTitle: (mediaTitle != null && mediaTitle.isNotEmpty) ? mediaTitle : (host?.title ?? 'EcoHub'),
+      mediaTitle: (mediaTitle != null && mediaTitle.isNotEmpty)
+          ? mediaTitle
+          : (host?.title ?? AppBranding.defaultCastTitle),
       startPosition: startSec,
       startDuration: totalDuration ?? host?.totalDuration ?? 0,
       connectedUsn: connectedUsn,

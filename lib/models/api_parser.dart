@@ -1,3 +1,4 @@
+import '../common/app_branding.dart';
 import 'film_models.dart';
 import '../utils/format_util.dart';
 
@@ -379,7 +380,7 @@ class ApiParser {
     final appVer = str(notice, 'appVersion').isNotEmpty ? str(notice, 'appVersion') : str(notice, 'version');
 
     return BasicConfig(
-      siteName: str(map, 'siteName', 'EcoHub'),
+      siteName: str(map, 'siteName', AppBranding.displayName),
       siteUrl: str(map, 'siteUrl'),
       logo: str(map, 'logo'),
       keyword: str(map, 'keyword'),

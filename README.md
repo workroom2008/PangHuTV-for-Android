@@ -1,14 +1,14 @@
-# EcoHub for Android
+# 胖虎影视 for Android
 
 [![Release](https://img.shields.io/github/v/release/workroom2008/EcoHub-for-Android)](https://github.com/workroom2008/EcoHub-for-Android/releases)
 [![Download APK](https://img.shields.io/badge/Download-.apk-green?logo=android&logoColor=white)](https://github.com/workroom2008/EcoHub-for-Android/releases/latest)
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white)](https://flutter.dev/)
 
-[EcoHub](https://github.com/workroom2008/PangHuTV) 的 Android 原生客户端（基于 Flutter 构建）。
+[胖虎影视（PangHuTV）](https://github.com/workroom2008/PangHuTV) 的 Android 原生客户端（基于 Flutter 构建）。
 
-> **提示**：本仓库是 EcoHub 的纯客户端应用，**本身不提供、不存储任何影视资源**。安装后需配置 **服务端地址** 并用网站账号登录后方可浏览与观影。
+> **提示**：本仓库是胖虎影视的纯客户端应用，**本身不提供、不存储任何影视资源**。安装后需配置 **服务端地址** 并用网站账号登录后方可浏览与观影。
 > 
-> 相关项目：[EcoHub 主仓库（服务端 + Web）](https://github.com/workroom2008/PangHuTV) · 移动端仅维护 **Android / iOS**（本 Flutter 工程）
+> 相关项目：[胖虎影视主仓库（服务端 + Web）](https://github.com/workroom2008/PangHuTV) · 移动端 **Android / iOS**（本 Flutter 工程）
 
 ---
 
@@ -23,12 +23,12 @@
 
 ## 📡 服务端说明
 
-客户端所有影视列表、分类、搜索、播放地址均由你接入的 **EcoHub 服务端** 提供。
+客户端所有影视列表、分类、搜索、播放地址均由你接入的 **胖虎影视服务端** 提供。
 
 ### 1. 服务端从哪来？
 
 - **自建部署（推荐）**  
-  按照 [EcoHub 部署指南](https://github.com/workroom2008/PangHuTV/blob/main/docs/README-Deploy.md) 在你的服务器上部署 EcoHub 服务端。  
+  按照 [胖虎影视部署指南](https://github.com/workroom2008/PangHuTV/blob/main/docs/README-Deploy.md) 在你的服务器上部署服务端。  
   部署成功后，在管理后台「工作台」点击「订阅地址」即可获取客户端订阅源：
   ```
   http://<你的服务器IP或域名>:3000/api/provide/app
@@ -36,7 +36,7 @@
   *(若配置了 HTTPS 或反向代理，格式为 `https://<你的域名>/api/provide/app`，亦兼容原 `/api` 路径)*。在管理后台完成影视数据采集后，客户端即可直接同步。
 
 - **使用公共源 / 他人分享源**  
-  如果你有朋友已经部署了 EcoHub 站点，或使用社区公开的 EcoHub 节点，可直接获取其服务端根地址填入（填入你部署的服务端根地址即可）。
+  若已有他人部署的胖虎影视站点，可直接获取其服务端根地址填入（填入你部署的服务端根地址即可）。
 
 ### 2. 如何在 App 中配置？
 

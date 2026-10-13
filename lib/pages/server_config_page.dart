@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../common/app_branding.dart';
 import '../common/app_theme.dart';
 import '../services/auth_session.dart';
 import '../services/app_catalog_service.dart';
@@ -135,7 +136,7 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
         StartIconImage(size: iconSize, radius: iconRadius),
         SizedBox(height: landscape ? 8 : 14),
         Text(
-          'EcoHub',
+          AppBranding.displayName,
           style: TextStyle(
             fontSize: landscape ? 22 : 26,
             fontWeight: FontWeight.bold,

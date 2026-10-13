@@ -19,7 +19,7 @@ void main() {
 
     test('parser keeps empty notice version empty (does not invent 1)', () {
       final config = ApiParser.parseBasicConfig({
-        'siteName': 'EcoHub',
+        'siteName': '胖虎影视',
         'notice': {
           'enabled': true,
           'title': '站点公告',

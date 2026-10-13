@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../common/app_branding.dart';
 import '../common/app_theme.dart';
 import '../utils/format_util.dart';
 import 'app_icon.dart';
@@ -121,7 +122,7 @@ class ProfileSiteCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        siteName.isNotEmpty ? siteName : 'EcoHub',
+                        siteName.isNotEmpty ? siteName : AppBranding.displayName,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,

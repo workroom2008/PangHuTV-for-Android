@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../common/app_branding.dart';
 import '../services/auth_gate.dart';
 import '../services/auth_session.dart';
 import '../utils/server_config_manager.dart';
@@ -56,9 +57,11 @@ class HttpClient {
     if (_userAgent.isNotEmpty) return _userAgent;
     try {
       final version = await AppVersionUtil.getVersionName();
-      _userAgent = version.isNotEmpty ? 'EcoHub-App/$version' : 'EcoHub-App';
+      _userAgent = version.isNotEmpty
+          ? '${AppBranding.userAgentProduct}/$version'
+          : AppBranding.userAgentProduct;
     } catch (_) {
-      _userAgent = 'EcoHub-App';
+      _userAgent = AppBranding.userAgentProduct;
     }
     return _userAgent;
   }

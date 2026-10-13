@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../common/app_branding.dart';
 import '../common/app_theme.dart';
 import '../models/film_models.dart';
 import '../api/film_api.dart';
@@ -37,7 +38,7 @@ class _MainScaffoldPageState extends State<MainScaffoldPage> with WidgetsBinding
   }
 
   int _currentTabIndex = 0;
-  String _siteName = 'EcoHub';
+  String _siteName = AppBranding.displayName;
   bool _siteOpen = true;
   String _siteHint = '';
   bool _ready = false;
@@ -107,7 +108,7 @@ class _MainScaffoldPageState extends State<MainScaffoldPage> with WidgetsBinding
   void _onConfigChange(BasicConfig config) {
     if (!mounted) return;
     setState(() {
-      _siteName = config.siteName.isNotEmpty ? config.siteName : 'EcoHub';
+      _siteName = config.siteName.isNotEmpty ? config.siteName : AppBranding.displayName;
       _siteOpen = config.state;
       _siteHint = config.hint;
     });
@@ -185,7 +186,7 @@ class _MainScaffoldPageState extends State<MainScaffoldPage> with WidgetsBinding
       final config = await FilmApi.getSiteConfig(force: first);
       if (!mounted) return;
       setState(() {
-        _siteName = config.siteName.isNotEmpty ? config.siteName : 'EcoHub';
+        _siteName = config.siteName.isNotEmpty ? config.siteName : AppBranding.displayName;
         _siteOpen = config.state;
         _siteHint = config.hint;
         _ready = true;

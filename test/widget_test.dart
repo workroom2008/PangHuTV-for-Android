@@ -601,10 +601,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('EcoHub'), findsOneWidget);
+      expect(find.text('胖虎影视'), findsOneWidget);
       expect(find.byType(ElevatedButton), findsOneWidget);
 
-      final titleCenter = tester.getCenter(find.text('EcoHub'));
+      final titleCenter = tester.getCenter(find.text('胖虎影视'));
       final buttonCenter = tester.getCenter(find.byType(ElevatedButton));
       final contentMidY = (titleCenter.dy + buttonCenter.dy) / 2;
 
@@ -625,7 +625,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('EcoHub'), findsOneWidget);
+      expect(find.text('胖虎影视'), findsOneWidget);
       expect(find.byType(ElevatedButton), findsOneWidget);
 
       final buttonCenter = tester.getCenter(find.byType(ElevatedButton));
@@ -1990,9 +1990,8 @@ void main() {
       expect(find.text('关于'), findsOneWidget);
       expect(find.text('版本更新'), findsOneWidget);
       expect(find.text('在线演示站点'), findsNothing);
-      expect(find.text('EcoHub 开源项目'), findsOneWidget);
-      expect(find.text('EcoHub for OHOS'), findsOneWidget);
-      expect(find.text('EcoHub for Android'), findsOneWidget);
+      expect(find.text('胖虎影视（PangHuTV）'), findsOneWidget);
+      expect(find.text('胖虎影视 Android'), findsOneWidget);
       expect(find.text('Telegram 交流群组'), findsOneWidget);
     });
   });

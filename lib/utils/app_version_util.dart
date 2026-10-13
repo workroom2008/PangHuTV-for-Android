@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
+import '../common/app_branding.dart';
 
 /// 应用升级信息
 class AppUpdateInfo {
@@ -159,7 +160,7 @@ class AppVersionUtil {
         Uri.parse('https://api.github.com/repos/workroom2008/EcoHub-for-Android/releases?per_page=10'),
         headers: {
           'Accept': 'application/vnd.github+json',
-          'User-Agent': 'EcoHub-App',
+          'User-Agent': AppBranding.userAgentProduct,
         },
       ).timeout(Duration(milliseconds: timeoutMs));
 

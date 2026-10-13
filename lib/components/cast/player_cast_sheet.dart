@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../common/app_branding.dart';
 import '../../common/app_theme.dart';
 import '../../types/dlna_types.dart';
 import '../../services/dlna_client.dart';
@@ -19,7 +20,7 @@ class PlayerCastSheet extends StatefulWidget {
   const PlayerCastSheet({
     super.key,
     required this.mediaUrl,
-    this.mediaTitle = 'EcoHub',
+    this.mediaTitle = AppBranding.defaultCastTitle,
     this.startPosition = 0,
     this.startDuration = 0,
     this.connectedUsn = '',
@@ -33,7 +34,7 @@ class PlayerCastSheet extends StatefulWidget {
   static void show(
     BuildContext context, {
     required String mediaUrl,
-    String mediaTitle = 'EcoHub',
+    String mediaTitle = AppBranding.defaultCastTitle,
     double startPosition = 0,
     double startDuration = 0,
     String connectedUsn = '',

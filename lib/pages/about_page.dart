@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../common/app_branding.dart';
 import '../common/app_theme.dart';
 import '../components/page_header.dart';
 import '../components/app_icon.dart';
@@ -51,7 +52,7 @@ class _AboutPageState extends State<AboutPage> {
       icon: Icons.language_rounded,
     ),
     _ProjectLinkItem(
-      title: 'EcoHub for Android',
+      title: '胖虎影视 Android',
       desc: 'Android 客户端应用源码',
       url: 'https://github.com/workroom2008/EcoHub-for-Android',
       icon: Icons.phone_android_rounded,
@@ -267,7 +268,7 @@ class _AboutPageState extends State<AboutPage> {
                                     const StartIconImage(size: 72, radius: 20),
                                     const SizedBox(height: 12),
                                     const Text(
-                                      'EcoHub',
+                                      AppBranding.displayName,
                                       style: TextStyle(
                                         fontSize: 22,
                                         fontWeight: FontWeight.bold,
@@ -284,7 +285,7 @@ class _AboutPageState extends State<AboutPage> {
                                     ),
                                     const SizedBox(height: 6),
                                     const Text(
-                                      '自托管高性能多源影视聚合系统',
+                                      AppBranding.tagline,
                                       style: TextStyle(
                                         fontSize: 13,
                                         color: AppTheme.textSecondary,
@@ -411,8 +412,8 @@ class _AboutPageState extends State<AboutPage> {
                                 borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                                 border: Border.all(color: AppTheme.border, width: 0.5),
                               ),
-                              child: const Text(
-                                'EcoHub 为开源自托管影视聚合系统，不提供、不存储任何影视文件。片源来自使用者自行配置的采集接口。请遵守所在地区的法律法规及源站使用约定，仅供学习与技术交流。',
+                              child: Text(
+                                '${AppBranding.displayName} 为开源自托管影视聚合系统，不提供、不存储任何影视文件。片源来自使用者自行配置的采集接口。请遵守所在地区的法律法规及源站使用约定，仅供学习与技术交流。',
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: AppTheme.textSecondary,

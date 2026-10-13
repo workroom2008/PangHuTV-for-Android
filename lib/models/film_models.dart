@@ -1,3 +1,5 @@
+import '../common/app_branding.dart';
+
 /// 赞赏渠道信息
 class TipChannel {
   final String key;
@@ -35,7 +37,7 @@ class BasicConfig {
   final String noticeVersion;
 
   BasicConfig({
-    this.siteName = 'EcoHub',
+    this.siteName = AppBranding.displayName,
     this.siteUrl = '',
     this.logo = '',
     this.keyword = '',

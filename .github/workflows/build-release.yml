@@ -49,7 +49,7 @@ jobs:
               print(m.group(1) if m else 'unknown')
           ")
           short_sha="${GITHUB_SHA::7}"
-          dest="EcoHub-${version}-${short_sha}.ipa"
+          dest="PangHuTV-${version}-${short_sha}.ipa"
           (cd dist && zip -qr "$dest" Payload)
           rm -rf dist/Payload
           if [ ! -f "dist/$dest" ]; then

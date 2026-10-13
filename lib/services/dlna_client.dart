@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import '../common/app_branding.dart';
 import '../types/dlna_types.dart';
 
 /// DLNA MediaRenderer 客户端：SSDP 发现 + AVTransport + RenderingControl
@@ -80,7 +81,9 @@ class DlnaClient {
   }
 
   Future<void> cast(DlnaDevice device, String mediaUrl,
-      {String title = 'EcoHub', double startSec = 0, double durationSec = 0}) async {
+      {String title = AppBranding.defaultCastTitle,
+      double startSec = 0,
+      double durationSec = 0}) async {
     if (mediaUrl.trim().isEmpty) throw Exception('当前没有可投屏的地址');
     await _soapAction(device.controlURL, avt, 'SetAVTransportURI',
         _buildSetUriBody(mediaUrl, title, durationSec));
@@ -315,7 +318,8 @@ class DlnaClient {
       '<DesiredVolume>$volume</DesiredVolume></u:SetVolume>';
 
   String _buildDidl(String mediaUrl, String title, double durationSec) {
-    final safeTitle = _xmlEscape(title.isNotEmpty ? title : 'EcoHub');
+    final safeTitle =
+        _xmlEscape(title.isNotEmpty ? title : AppBranding.defaultCastTitle);
     final safeUrl = _xmlEscape(mediaUrl);
     final durAttr = durationSec > 1 ? ' duration="${formatRelTime(durationSec)}"' : '';
     return '<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" '

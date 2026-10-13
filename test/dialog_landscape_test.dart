@@ -274,7 +274,7 @@ void main() {
                 const ColoredBox(color: Colors.black, child: SizedBox.expand()),
                 NoticeDialog(
                   title: '站点公告',
-                  content: '欢迎使用 EcoHub',
+                  content: '欢迎使用胖虎影视',
                   onClose: () {},
                 ),
               ],
