@@ -82,9 +82,9 @@ class SourceGuard {
           canPop: false,
           child: AlertDialog(
             backgroundColor: AppTheme.bgElevated,
-            title: const Text('软件源失联', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
+            title: const Text('服务端失联', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
             content: const Text(
-              '检测到当前软件源连接异常，是否前往重新配置？',
+              '检测到当前服务端连接异常，是否前往重新配置？',
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
             ),
             actions: [
@@ -101,7 +101,7 @@ class SourceGuard {
                   Navigator.pop(dialogCtx);
                   _doNavigate();
                 },
-                child: const Text('更换软件源', style: TextStyle(color: AppTheme.accent, fontWeight: FontWeight.bold)),
+                child: const Text('更换服务端', style: TextStyle(color: AppTheme.accent, fontWeight: FontWeight.bold)),
               ),
             ],
           ),

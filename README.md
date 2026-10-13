@@ -6,9 +6,9 @@
 
 [EcoHub](https://github.com/fe-spark/EcoHub) 的 Android 原生客户端（基于 Flutter 构建）。
 
-> **提示**：本仓库是 EcoHub 的纯客户端应用，**本身不提供、不存储任何影视资源**。安装后需要配置并接入 EcoHub 软件源（服务端）方可正常浏览与观影。
+> **提示**：本仓库是 EcoHub 的纯客户端应用，**本身不提供、不存储任何影视资源**。安装后需配置 **服务端地址** 并用网站账号登录后方可浏览与观影。
 > 
-> 相关项目：[EcoHub 主仓库（服务端 + Web）](https://github.com/fe-spark/EcoHub) · [EcoHub for OHOS](https://github.com/fe-spark/EcoHub-for-OHOS)
+> 相关项目：[EcoHub 主仓库（服务端 + Web）](https://github.com/fe-spark/EcoHub) · 移动端仅维护 **Android / iOS**（本 Flutter 工程）
 
 ---
 
@@ -21,11 +21,11 @@
 
 ---
 
-## 📡 软件源说明
+## 📡 服务端说明
 
-客户端所有影视列表、分类、搜索、播放地址均由 **EcoHub 软件源** 提供。
+客户端所有影视列表、分类、搜索、播放地址均由你接入的 **EcoHub 服务端** 提供。
 
-### 1. 软件源怎么来？
+### 1. 服务端从哪来？
 
 - **自建部署（推荐）**  
   按照 [EcoHub 部署指南](https://github.com/fe-spark/EcoHub/blob/main/docs/README-Deploy.md) 在你的服务器上部署 EcoHub 服务端。  
@@ -36,14 +36,13 @@
   *(若配置了 HTTPS 或反向代理，格式为 `https://<你的域名>/api/provide/app`，亦兼容原 `/api` 路径)*。在管理后台完成影视数据采集后，客户端即可直接同步。
 
 - **使用公共源 / 他人分享源**  
-  如果你有朋友已经部署了 EcoHub 站点，或使用社区公开的 EcoHub 节点，可以直接获取其软件源地址填入（例如官方演示源 `https://eco.fe-spark.cn/api/provide/app`）。
+  如果你有朋友已经部署了 EcoHub 站点，或使用社区公开的 EcoHub 节点，可直接获取其服务端根地址填入（演示：`https://eco.fe-spark.cn`）。
 
 ### 2. 如何在 App 中配置？
 
-1. 打开 App，首次进入或未连接时会自动弹出 **软件源配置** 界面；
-2. 输入软件源地址（如 `http://<服务器IP或域名>:3000` 或复制后台完整的 `/api/provide/app` 订阅源，未填协议头会自动补齐 `https://`；若站点开启了私有化访问，在地址末尾追加 `?key=您的密钥`）；
-3. 点击 **开始观影** / **重新接入**，App 会自动测试与服务端的连通性（请求 `/api/provide/app` 接口）；
-4. 校验通过后即可进入首页观影。后续可在「我的」或设置中管理/切换历史软件源。
+1. 填写 **服务端根地址**（如 `http://192.168.1.250:3008` 或反代 `https://vod.example.com`，不要带 `/api/...`）；
+2. 使用与 **网站相同的账号密码登录**（`POST /api/login`，Token 与 Web 共用）；
+3. 登录后 App 会拉取 `/api/app/bootstrap`，后台新增采集源会自动出现在搜索/源列表中。
 
 ---
 
@@ -65,20 +64,44 @@
 
 ---
 
-## 🛠️ 本地开发
+## 🛠️ 构建分工
 
-确保本地已安装 [Flutter SDK](https://flutter.dev/docs/get-started/install)：
+| 平台 | 在哪里打 |
+| --- | --- |
+| **Android APK** | 本机 `D:\Android`（Flutter + SDK） |
+| **iOS IPA** | 暂不在 CI 编译；需要时会再开启（workflow 保留，仅手动触发） |
 
-```bash
-# 获取依赖
+本机目录约定：
+
+- SDK：`D:\Android\Sdk`
+- Flutter：`D:\Android\flutter`
+
+### Android（本机）
+
+```powershell
+# 首次：复制 SDK 路径配置
+copy app-for-android\android\local.properties.example app-for-android\android\local.properties
+
+# 或直接运行脚本（会自动复制 local.properties）
+app-for-android\scripts\build-apk-win.cmd
+```
+
+手动命令：
+
+```powershell
+$env:ANDROID_HOME = "D:\Android\Sdk"
+$env:Path = "D:\Android\flutter\bin;" + $env:Path
+cd app-for-android
 flutter pub get
-
-# 运行调试
-flutter run
-
-# 打包 APK（分包构建各架构独立 APK）
+flutter run                    # 调试
 flutter build apk --release --split-per-abi
 ```
+
+产物：`build/app/outputs/flutter-apk/app-*-release.apk`
+
+### iOS
+
+当前 **不自动构建**。以后要发 iOS 时再说，可在子模块仓库 Actions 里手动跑 **Build Release (iOS IPA)**，或恢复 workflow 里的 `tags: v*.*.*` 触发。
 
 ---
 

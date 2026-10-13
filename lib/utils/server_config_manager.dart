@@ -243,7 +243,7 @@ class ServerConfigManager {
   String buildApiUrl(String path) {
     final apiBase = getApiBase();
     if (apiBase.isEmpty) {
-      throw Exception('未配置软件源');
+      throw Exception('未配置服务端地址');
     }
     final apiPath = path.startsWith('/') ? path : '/$path';
     return '$apiBase$apiPath';

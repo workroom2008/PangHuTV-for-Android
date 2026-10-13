@@ -55,7 +55,7 @@ class _HistoryPageState extends State<HistoryPage> {
       builder: (dialogCtx) => AlertDialog(
         backgroundColor: AppTheme.bgElevated,
         title: const Text('清空观看历史', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
-        content: const Text('确定删除当前软件源的全部观看记录吗？', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+        content: const Text('确定删除当前服务端的全部观看记录吗？', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx),

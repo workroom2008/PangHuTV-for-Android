@@ -141,7 +141,7 @@ class ProfileSiteCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             const Text(
-                              '软件源',
+                              '服务端',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,

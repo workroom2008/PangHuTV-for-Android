@@ -5,6 +5,8 @@ import '../models/film_models.dart';
 import '../utils/breakpoint.dart';
 import '../utils/source_guard.dart';
 import '../api/film_api.dart';
+import '../models/app_catalog.dart';
+import '../services/app_catalog_service.dart';
 import '../components/loading_view.dart';
 import '../components/empty_state.dart';
 import '../components/film_row.dart';
@@ -39,6 +41,8 @@ class _RecommendTabState extends State<RecommendTab> {
   String _errorText = '';
   double _headerAlpha = 0;
   int _reloadToken = 0;
+  String _collectSourceId = '';
+  List<CollectSourceOption> _collectSources = [];
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -47,7 +51,19 @@ class _RecommendTabState extends State<RecommendTab> {
     FavoriteManager.preload();
     _scrollController.addListener(_onScroll);
     SourceGuard.onReconnect(_onReconnect);
+    _reloadCatalog();
     _loadHome(fromPull: false);
+  }
+
+  void _reloadCatalog() {
+    final list = AppCatalogService.instance.collectSources;
+    setState(() {
+      _collectSources = list;
+      if (_collectSourceId.isNotEmpty &&
+          !list.any((e) => e.id == _collectSourceId)) {
+        _collectSourceId = '';
+      }
+    });
   }
 
   @override
@@ -60,6 +76,13 @@ class _RecommendTabState extends State<RecommendTab> {
 
   void _onReconnect() {
     FavoriteManager.preload();
+    _reloadCatalog();
+    _loadHome(fromPull: false);
+  }
+
+  void _selectCollectSource(String id) {
+    if (_collectSourceId == id) return;
+    setState(() => _collectSourceId = id);
     _loadHome(fromPull: false);
   }
 
@@ -97,7 +120,7 @@ class _RecommendTabState extends State<RecommendTab> {
     }
     var ok = false;
     try {
-      final home = await FilmApi.getHome();
+      final home = await FilmApi.getHome(sourceId: _collectSourceId);
       if (!mounted) return;
       setState(() {
         _banners = home.banners;
@@ -153,6 +176,46 @@ class _RecommendTabState extends State<RecommendTab> {
 
   void _openFilter(int pid) {
     Navigator.pushNamed(context, '/filter', arguments: {'Pid': '$pid'});
+  }
+
+  Widget _collectSourceBar(bool wide, double leftInset, double rightInset) {
+    if (_collectSources.length <= 1) return const SizedBox.shrink();
+    final chips = <({String id, String name})>[
+      (id: '', name: '综合'),
+      ..._collectSources.map((s) => (id: s.id, name: s.name)),
+    ];
+    return Padding(
+      padding: EdgeInsets.only(
+        top: wide ? 10 : 8,
+        bottom: wide ? 6 : 4,
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.only(
+          left: AppTheme.spaceLg + leftInset,
+          right: AppTheme.spaceLg + rightInset,
+        ),
+        child: Row(
+          children: chips.map((c) {
+            final active = _collectSourceId == c.id;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(c.name),
+                selected: active,
+                onSelected: (_) => _selectCollectSource(c.id),
+                selectedColor: AppTheme.accent.withValues(alpha: 0.35),
+                backgroundColor: AppTheme.bgCard,
+                labelStyle: TextStyle(
+                  color: active ? AppTheme.textPrimary : AppTheme.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
   }
 
   Widget _categoryEntry(HomeSection section, bool wide) {
@@ -227,7 +290,7 @@ class _RecommendTabState extends State<RecommendTab> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _pillButton(icon: Icons.link_rounded, label: '更换软件源', accent: true, onTap: () => Navigator.pushNamed(context, '/server_config')),
+        _pillButton(icon: Icons.link_rounded, label: '更换服务端', accent: true, onTap: () => Navigator.pushNamed(context, '/server_config')),
         const SizedBox(height: 12),
         _pillButton(icon: Icons.refresh_rounded, label: label, accent: false, onTap: onTap),
       ],
@@ -413,7 +476,7 @@ class _RecommendTabState extends State<RecommendTab> {
         rightInset: rightInset,
         child: EmptyState(
           title: '暂无影片数据',
-          subtitle: '当前软件源内暂无影片或尚未采集，可下拉刷新或更换软件源',
+          subtitle: '当前源暂无影片或尚未采集，可下拉刷新或切换上方采集源',
           icon: Icons.movie_outlined,
           action: _stateActions(label: '刷新', onTap: () => _loadHome(fromPull: true, showHint: true)),
         ),
@@ -432,6 +495,7 @@ class _RecommendTabState extends State<RecommendTab> {
             children: [
               if (topSpace > 0) SizedBox(height: topSpace),
               HomeBanner(key: ValueKey(_reloadToken), banners: _banners),
+              _collectSourceBar(wide, leftInset, rightInset),
               if (sections.isNotEmpty)
                 Padding(
                   padding: EdgeInsets.only(bottom: wide ? 14 : AppTheme.spaceLg),

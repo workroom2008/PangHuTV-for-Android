@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../common/app_theme.dart';
 import '../components/page_header.dart';
+import '../api/auth_api.dart';
 import '../utils/app_settings_manager.dart';
 
 /// 设置页面，全量对齐 OHOS `SettingsPage.ets`
@@ -274,11 +275,29 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                           ),
                           clipBehavior: Clip.antiAlias,
-                          child: _buildActionRow(
-                            title: '清理本地缓存',
-                            subtitle: '清理图片与临时网络数据',
-                            extra: _cacheSize,
-                            onTap: _handleClearCache,
+                          child: Column(
+                            children: [
+                              _buildActionRow(
+                                title: '清理本地缓存',
+                                subtitle: '清理图片与临时网络数据',
+                                extra: _cacheSize,
+                                onTap: _handleClearCache,
+                              ),
+                              _cardDivider(),
+                              _buildActionRow(
+                                title: '退出登录',
+                                subtitle: '清除本机 Token，需重新登录',
+                                extra: '',
+                                onTap: () async {
+                                  await AuthApi.logout();
+                                  if (!context.mounted) return;
+                                  Navigator.of(context).pushNamedAndRemoveUntil(
+                                    '/login',
+                                    (route) => false,
+                                  );
+                                },
+                              ),
+                            ],
                           ),
                         ),
                       ],

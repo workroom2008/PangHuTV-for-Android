@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../common/app_theme.dart';
+import '../services/auth_session.dart';
+import '../services/app_catalog_service.dart';
 import '../utils/server_config_manager.dart';
 import '../utils/app_version_util.dart';
 import '../api/film_api.dart';
@@ -32,6 +34,7 @@ class _SplashPageState extends State<SplashPage> {
   Future<void> _checkAndBootstrap() async {
     final startTime = DateTime.now().millisecondsSinceEpoch;
     await ServerConfigManager.instance.init();
+    await AuthSession.instance.init();
 
     final updateFuture = () async {
       try {
@@ -46,7 +49,7 @@ class _SplashPageState extends State<SplashPage> {
       await _ensureMinTime(startTime, _minSplashTimeMs);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请先配置软件源')),
+          const SnackBar(content: Text('请先配置服务端地址')),
         );
         Navigator.pushReplacementNamed(context, '/server_config');
       }
@@ -54,14 +57,14 @@ class _SplashPageState extends State<SplashPage> {
     }
 
     setState(() {
-      _statusText = '正在检测软件源连通性...';
+      _statusText = '正在检测服务端连通性...';
     });
 
     var ok = false;
     for (var i = 0; i < _probeAttempts; i++) {
       if (i > 0) {
         setState(() {
-          _statusText = '正在重试软件源连通性 (${i + 1}/$_probeAttempts)...';
+          _statusText = '正在重试服务端连通性 (${i + 1}/$_probeAttempts)...';
         });
       }
       try {
@@ -76,7 +79,7 @@ class _SplashPageState extends State<SplashPage> {
 
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('软件源连接失败，请检查网络或重新配置')),
+        const SnackBar(content: Text('服务端连接失败，请检查网络或重新配置')),
       );
       Navigator.pushReplacementNamed(
         context,
@@ -99,6 +102,14 @@ class _SplashPageState extends State<SplashPage> {
       return;
     }
 
+    if (!AuthSession.instance.isLoggedIn) {
+      Navigator.pushReplacementNamed(context, '/login');
+      return;
+    }
+    setState(() => _statusText = '正在同步源目录...');
+    try {
+      await AppCatalogService.instance.refresh(force: true);
+    } catch (_) {}
     _goMain();
   }
 

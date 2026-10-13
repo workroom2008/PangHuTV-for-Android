@@ -1,0 +1,4 @@
+# 复制为 local.properties（勿提交 Git）
+# 本机 Android 环境根目录：D:\Android
+sdk.dir=D\:\\Android\\Sdk
+flutter.sdk=D\:\\Android\\flutter

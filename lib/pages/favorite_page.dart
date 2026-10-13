@@ -59,7 +59,7 @@ class _FavoritePageState extends State<FavoritePage> {
       builder: (dialogCtx) => AlertDialog(
         backgroundColor: AppTheme.bgElevated,
         title: const Text('清空收藏', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
-        content: const Text('确定清空当前软件源的所有收藏记录吗？', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+        content: const Text('确定清空当前服务端的所有收藏记录吗？', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx),

@@ -21,8 +21,9 @@ class FilmApi {
     _configListeners.remove(listener);
   }
 
-  static Future<HomeData> getHome() async {
-    final res = await HttpClient.instance.get('/index');
+  static Future<HomeData> getHome({String sourceId = ''}) async {
+    final params = sourceId.trim().isNotEmpty ? {'source': sourceId.trim()} : null;
+    final res = await HttpClient.instance.get('/index', params: params);
     if (res.code != 0 || res.data == null) {
       throw Exception(res.msg.isNotEmpty ? res.msg : '首页数据获取失败');
     }

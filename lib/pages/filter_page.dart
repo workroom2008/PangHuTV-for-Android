@@ -327,7 +327,7 @@ class _FilterPageState extends State<FilterPage> {
             action: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _ActionPill(icon: Icons.link_rounded, label: '更换软件源', accent: true, onTap: () => Navigator.pushNamed(context, '/server_config')),
+                _ActionPill(icon: Icons.link_rounded, label: '更换服务端', accent: true, onTap: () => Navigator.pushNamed(context, '/server_config')),
                 const SizedBox(height: 12),
                 _ActionPill(icon: Icons.refresh_rounded, label: '刷新', accent: false, onTap: () => _loadData(true)),
               ],

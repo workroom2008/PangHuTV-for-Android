@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../services/auth_gate.dart';
+import '../services/auth_session.dart';
 import '../utils/server_config_manager.dart';
 import '../utils/source_guard.dart';
 import '../utils/site_heartbeat.dart';
@@ -88,6 +90,26 @@ class HttpClient {
     }
 
     return _send(url, timeoutMs);
+  }
+
+  Future<ApiResponse> post(
+    String path, {
+    Map<String, dynamic>? body,
+    int timeoutMs = 15000,
+  }) async {
+    final manager = ServerConfigManager.instance;
+    final url = manager.buildApiUrl(path);
+    final userAgent = await _resolveUserAgent();
+    final headers = await _authHeaders(userAgent);
+    headers['Content-Type'] = 'application/json';
+    final res = await http
+        .post(
+          Uri.parse(url),
+          headers: headers,
+          body: jsonEncode(body ?? {}),
+        )
+        .timeout(Duration(milliseconds: timeoutMs));
+    return _parseHttpResponse(res);
   }
 
   void trackView(
@@ -195,28 +217,84 @@ class HttpClient {
     if (lower.contains('nodename nor servname') ||
         lower.contains('host lookup') ||
         lower.contains('failed host lookup')) {
-      return '无法解析软件源地址，请检查域名或网络';
+      return '无法解析服务端地址，请检查域名或网络';
     }
 
     return msg.isNotEmpty ? msg : '服务未启动或网关异常 (服务错误)';
   }
 
+  Future<Map<String, String>> _authHeaders(String userAgent) async {
+    final manager = ServerConfigManager.instance;
+    String deviceId = '';
+    try {
+      deviceId = await manager.getDeviceId();
+    } catch (_) {}
+    final token = AuthSession.instance.token.trim();
+    final provideKey = manager.provideKey;
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'User-Agent': userAgent,
+      if (deviceId.isNotEmpty) 'X-Device-Id': deviceId,
+      if (deviceId.isNotEmpty) 'Device-Id': deviceId,
+      if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+      if (token.isNotEmpty) 'Token': token,
+      if (token.isEmpty && provideKey.isNotEmpty) 'X-Provide-Key': provideKey,
+    };
+  }
+
+  ApiResponse _parseHttpResponse(http.Response res) {
+    if (res.statusCode == 401) {
+      AuthGate.handleUnauthorized();
+      throw Exception('请先登录');
+    }
+    if (res.statusCode != 200) {
+      String errMsg = 'HTTP ${res.statusCode}';
+      try {
+        final body = jsonDecode(utf8.decode(res.bodyBytes));
+        if (body is Map && body['msg'] != null && body['msg'].toString().isNotEmpty) {
+          errMsg = body['msg'].toString();
+        }
+      } catch (_) {}
+      throw Exception(errMsg);
+    }
+    final body = jsonDecode(utf8.decode(res.bodyBytes));
+    if (body is Map<String, dynamic>) {
+      return ApiResponse.fromJson(body);
+    }
+    if (body is Map) {
+      return ApiResponse.fromJson(body.map((k, v) => MapEntry('$k', v)));
+    }
+    throw Exception('响应格式错误');
+  }
+
   Future<ConnectionResult> testConnection(String baseUrl) async {
     final raw = baseUrl.trim();
     if (raw.isEmpty) {
-      return const ConnectionResult(ok: false, message: '请输入有效的软件源地址');
+      return const ConnectionResult(ok: false, message: '请输入有效的服务端地址');
     }
     final manager = ServerConfigManager.instance;
     final origin = ServerConfigManager.stripApiSuffix(manager.normalizeRaw(baseUrl));
     if (origin.isEmpty || origin == 'https://' || origin == 'http://') {
-      return const ConnectionResult(ok: false, message: '请输入有效的软件源地址');
+      return const ConnectionResult(ok: false, message: '请输入有效的服务端地址');
     }
 
     final key = ServerConfigManager.extractProvideKey(baseUrl);
     SourceGuard.beginSkip();
     try {
+      // 公开探活：与 Web 一致，仅验证服务端根地址可达
+      try {
+        final response = await _send('$origin/api/config/basic', 5000, customKey: key);
+        if (response.code == 0) {
+          return const ConnectionResult(ok: true);
+        }
+      } catch (basicErr) {
+        final msg = basicErr.toString().replaceFirst('Exception: ', '');
+        if (msg.contains('401') || msg.contains('登录')) {
+          return const ConnectionResult(ok: true);
+        }
+      }
       final query = key.isNotEmpty ? '?key=${Uri.encodeComponent(key)}' : '';
-      // 优先探测专有端点 /api/provide/app，可直接检验私有化与订阅密钥
       try {
         final response = await _send('$origin/api/provide/app$query', 5000, customKey: key);
         if (response.code == 1 || response.code == 0) {
@@ -265,41 +343,17 @@ class HttpClient {
   Future<ApiResponse> _send(String url, int timeoutMs, {String? customKey}) async {
     final userAgent = await _resolveUserAgent();
     final manager = ServerConfigManager.instance;
-    String deviceId = '';
     try {
-      deviceId = await manager.getDeviceId();
-    } catch (_) {}
-    final key = customKey ?? (manager.provideKey.isNotEmpty ? manager.provideKey : null);
-    try {
-      final res = await http.get(
-        Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'User-Agent': userAgent,
-          if (deviceId.isNotEmpty) 'X-Device-Id': deviceId,
-          if (deviceId.isNotEmpty) 'Device-Id': deviceId,
-          if (key != null && key.isNotEmpty) 'X-Provide-Key': key,
-        },
-      ).timeout(Duration(milliseconds: timeoutMs));
-
-      if (res.statusCode != 200) {
-        String errMsg = 'HTTP ${res.statusCode}';
-        try {
-          final body = jsonDecode(utf8.decode(res.bodyBytes));
-          if (body is Map && body['msg'] != null && body['msg'].toString().isNotEmpty) {
-            errMsg = body['msg'].toString();
-          }
-        } catch (_) {}
-        throw Exception(errMsg);
+      var headers = await _authHeaders(userAgent);
+      if (customKey != null && customKey.isNotEmpty &&
+          !headers.containsKey('Authorization')) {
+        headers = Map<String, String>.from(headers)
+          ..['X-Provide-Key'] = customKey;
       }
-      final body = jsonDecode(utf8.decode(res.bodyBytes));
-      if (body is Map<String, dynamic>) {
-        return ApiResponse.fromJson(body);
-      } else if (body is Map) {
-        return ApiResponse.fromJson(body.map((k, v) => MapEntry('$k', v)));
-      }
-      throw Exception('响应格式错误');
+      final res = await http
+          .get(Uri.parse(url), headers: headers)
+          .timeout(Duration(milliseconds: timeoutMs));
+      return _parseHttpResponse(res);
     } catch (e) {
       if (e is Exception) rethrow;
       throw Exception('网络请求失败');

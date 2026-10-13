@@ -246,7 +246,7 @@ class _DailyUpdatePaneState extends State<DailyUpdatePane> with AutomaticKeepAli
                 children: [
                   _paneActionPill(
                     icon: Icons.link_rounded,
-                    label: '更换软件源',
+                    label: '更换服务端',
                     accent: true,
                     onTap: () => Navigator.pushNamed(context, '/server_config'),
                   ),

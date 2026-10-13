@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../common/app_theme.dart';
 import '../models/film_models.dart';
 import '../api/film_api.dart';
+import '../services/app_catalog_service.dart';
+import '../services/auth_session.dart';
 import '../utils/server_config_manager.dart';
 import '../utils/site_heartbeat.dart';
 import '../utils/source_guard.dart';
@@ -158,8 +160,16 @@ class _MainScaffoldPageState extends State<MainScaffoldPage> with WidgetsBinding
       }
       return;
     }
+    if (!AuthSession.instance.isLoggedIn) {
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+      return;
+    }
+    try {
+      await AppCatalogService.instance.refresh();
+    } catch (_) {}
 
-    // 对齐 OHOS Index.aboutToAppear: 走 loadSite(false) 直接复用开屏自检探测缓存，避免二次 loading
     await _loadSite(false);
     HttpClient.instance.trackView('browse', '', 'IndexPage');
     SiteHeartbeat.instance.start();
@@ -373,7 +383,7 @@ class _MainScaffoldPageState extends State<MainScaffoldPage> with WidgetsBinding
               child: Text(
                 _siteHint.isNotEmpty
                     ? _siteHint
-                    : '当前站点正在进行系统维护，暂无法提供观影服务，请稍后刷新重试或更换其他软件源。',
+                    : '当前站点正在进行系统维护，暂无法提供观影服务，请稍后刷新重试或更换服务端。',
                 style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.5),
                 textAlign: TextAlign.center,
               ),
@@ -412,7 +422,7 @@ class _MainScaffoldPageState extends State<MainScaffoldPage> with WidgetsBinding
                       ),
                       onPressed: () => Navigator.pushNamed(context, '/server_config'),
                       icon: const Icon(Icons.link_rounded, size: 16),
-                      label: const Text('更换软件源'),
+                      label: const Text('更换服务端'),
                     ),
                   ),
                 ),

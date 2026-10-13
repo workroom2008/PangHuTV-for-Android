@@ -252,7 +252,7 @@ void main() {
     test('testConnection empty url returns invalid message', () async {
       final res = await HttpClient.instance.testConnection('');
       expect(res.ok, false);
-      expect(res.message, '请输入有效的软件源地址');
+      expect(res.message, '请输入有效的服务端地址');
     });
 
     test('formatConnectionError correctly identifies 502/503/504 and connection refused as service error', () {

@@ -3,7 +3,10 @@ import 'package:flutter/services.dart';
 import 'common/app_theme.dart';
 import 'utils/app_orientation.dart';
 import 'utils/source_guard.dart';
+import 'pages/login_page.dart';
 import 'pages/splash_page.dart';
+import 'services/auth_gate.dart';
+import 'services/auth_session.dart';
 import 'pages/main_scaffold_page.dart';
 import 'pages/server_config_page.dart';
 import 'pages/filter_page.dart';
@@ -47,12 +50,14 @@ void main() async {
   SystemChrome.setPreferredOrientations(kAutoRotationOrientations);
 
   SourceGuard.navigatorKey = appNavigatorKey;
+  AuthGate.navigatorKey = appNavigatorKey;
 
   // 对齐 OHOS EntryAbility.onWindowStageCreate 初始化管线
   await Future.wait([
     ServerConfigManager.instance.init(),
     AppSettingsManager.instance.init(),
   ]);
+  await AuthSession.instance.init();
   await HistoryManager.migrateLegacy();
 
   runApp(const EcoHubApp());
@@ -124,6 +129,9 @@ class _EcoHubAppState extends State<EcoHubApp> with WidgetsBindingObserver {
               break;
             case '/main':
               page = const MainScaffoldPage();
+              break;
+            case '/login':
+              page = const LoginPage();
               break;
             case '/server_config':
               page = ServerConfigPage(

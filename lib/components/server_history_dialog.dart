@@ -74,7 +74,7 @@ Future<void> showServerHistoryDialog({
                   const Padding(
                     padding: EdgeInsets.only(bottom: 14),
                     child: Text(
-                      '点击任意软件源即可直接选择填入',
+                      '点击任意地址即可直接选择填入',
                       style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
                     ),
                   ),
@@ -97,7 +97,7 @@ Widget _header(BuildContext ctx, bool canClear, VoidCallback onClear) {
         const SizedBox(width: 6),
         const Expanded(
           child: Text(
-            '历史软件源',
+            '历史服务端',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
           ),
         ),
@@ -199,9 +199,9 @@ void _confirmClear(
     builder: (ctx) {
       return AlertDialog(
         backgroundColor: AppTheme.bgElevated,
-        title: const Text('清空历史软件源', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
+        title: const Text('清空历史地址', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16)),
         content: const Text(
-          '确定要清空全部历史软件源记录吗？',
+          '确定要清空全部历史服务端地址吗？',
           style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
         ),
         actions: [

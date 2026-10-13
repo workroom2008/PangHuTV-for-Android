@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../common/app_theme.dart';
+import '../services/auth_session.dart';
+import '../services/app_catalog_service.dart';
 import '../utils/server_config_manager.dart';
 import '../utils/source_guard.dart';
 import '../utils/site_heartbeat.dart';
@@ -60,7 +62,7 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
     FocusScope.of(context).unfocus();
     final url = _controller.text.trim();
     if (url.isEmpty) {
-      _toast('请输入软件源地址');
+      _toast('请输入服务端地址');
       return;
     }
 
@@ -75,6 +77,8 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
     }
 
     await ServerConfigManager.instance.setServerUrl(url);
+    await AuthSession.instance.clear();
+    AppCatalogService.instance.clear();
     await _loadHistory();
     FilmApi.clearSiteConfig();
     SiteHeartbeat.instance.resetFailures();
@@ -83,7 +87,7 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
 
     if (!mounted) return;
     _toast(_reconnect ? '已重新接入' : '源已接入');
-    Navigator.of(context).pushNamedAndRemoveUntil('/main', (route) => false);
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
     SourceGuard.notifyReconnected();
   }
 
@@ -115,14 +119,14 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
         });
       },
       onReload: _loadHistory,
-      onToastCleared: () => _toast('已清空历史软件源'),
+      onToastCleared: () => _toast('已清空历史服务端地址'),
     );
   }
 
   Widget _brand({required bool landscape}) {
     final subtitle = _reconnect
-        ? (landscape ? '软件源连接失败\n请重新接入' : '软件源连接失败，请检查后重新接入')
-        : (landscape ? '配置软件源后观影' : '配置软件源后即可观影');
+        ? (landscape ? '服务端连接失败\n请重新配置' : '服务端连接失败，请检查后重试')
+        : (landscape ? '配置服务端后登录' : '填写服务端地址，使用网站账号登录');
     final iconSize = landscape ? 72.0 : 88.0;
     final iconRadius = landscape ? 16.0 : 20.0;
     return Column(
@@ -161,7 +165,7 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              '软件源地址',
+              '服务端地址',
               style: TextStyle(fontSize: landscape ? 12 : 13, color: AppTheme.textSecondary),
             ),
             if (_serverHistory.isNotEmpty)
@@ -204,7 +208,7 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
                   style: TextStyle(fontSize: inputFont, color: AppTheme.textPrimary),
                   cursorColor: AppTheme.accent,
                   decoration: InputDecoration(
-                    hintText: '请输入软件源地址',
+                    hintText: 'http://192.168.x.x:3008 或 https://域名',
                     hintStyle: TextStyle(fontSize: inputFont, color: AppTheme.textMuted),
                     border: InputBorder.none,
                     isDense: true,
