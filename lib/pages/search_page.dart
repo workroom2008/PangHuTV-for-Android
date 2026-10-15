@@ -290,9 +290,17 @@ class _SearchPageState extends State<SearchPage> {
           _loading = true;
         }
       });
-      if (_source.isNotEmpty && !_cache.containsKey(_source)) {
-        await _fetchSource(gen, kw, _source);
-      }
+      await Future.wait([
+        for (final tab in res.sources)
+          if (tab.id.isNotEmpty) _fetchSource(gen, kw, tab.id),
+      ]);
+      if (!mounted || gen != _searchGen) return;
+      setState(() {
+        _sources = [
+          for (final tab in _sources)
+            SearchSourceTab(id: tab.id, name: tab.name, count: tab.count, loading: false),
+        ];
+      });
     } catch (_) {
       if (!mounted || gen != _searchGen) return;
       setState(() {
