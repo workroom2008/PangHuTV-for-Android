@@ -1,7 +1,8 @@
 name: Build Release (iOS IPA)
 
-# Android APK：本机 D:\Android 构建。
-# iOS：默认不跑；需要发版时在 GitHub Actions 手动 workflow_dispatch，或恢复下方 tags 触发。
+# 构建分工：Android APK 仅本机 Windows（scripts/build-apk-win.cmd），不进 CI。
+# iOS IPA：本 workflow，macos-latest；仓库已 public，标准托管 runner 不计入私有库分钟额度。
+# 发版：Actions 手动 workflow_dispatch，或恢复下方 push.tags。
 on:
   workflow_dispatch:
 #  push:
