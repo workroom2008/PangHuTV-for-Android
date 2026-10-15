@@ -6,6 +6,9 @@ import '../utils/format_util.dart';
 import '../utils/nav_util.dart';
 import '../utils/server_config_manager.dart';
 import '../utils/favorite_manager.dart';
+import '../utils/play_navigation.dart';
+import '../services/front_download_service.dart';
+import '../models/download_models.dart';
 
 /// 影片海报卡片组件
 class FilmCard extends StatelessWidget {
@@ -25,6 +28,29 @@ class FilmCard extends StatelessWidget {
   String _resolvedPosterUrl() {
     final raw = FormatUtil.poster(film);
     return ServerConfigManager.instance.resolveMediaUrl(raw);
+  }
+
+  Future<void> _handleDownload(BuildContext context) async {
+    final id = FormatUtil.filmId(film);
+    if (!FrontDownloadService.instance.enabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先在后台「系统设置 → 下载整理」开启总开关')),
+      );
+      return;
+    }
+    if (!isDownloadableFilmId(id)) return;
+    try {
+      final ok = await FrontDownloadService.instance.submitEpisode(id, 1);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ok ? '下载任务已提交' : '提交失败')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
   }
 
   void _handleClick(BuildContext context) {
@@ -150,6 +176,37 @@ class FilmCard extends StatelessWidget {
                         return _buildFavoriteTag();
                       },
                     ),
+                  ),
+                  ListenableBuilder(
+                    listenable: FrontDownloadService.instance,
+                    builder: (context, _) {
+                      final id = FormatUtil.filmId(film);
+                      if (!FrontDownloadService.instance.enabled ||
+                          !isDownloadableFilmId(id) ||
+                          PlayNavigation.splitLivePlayId(id) != null) {
+                        return const SizedBox.shrink();
+                      }
+                      return Positioned(
+                        top: 6,
+                        right: 6,
+                        child: Material(
+                          color: const Color(0xC70A0B10),
+                          borderRadius: BorderRadius.circular(4),
+                          child: InkWell(
+                            onTap: () => _handleDownload(context),
+                            borderRadius: BorderRadius.circular(4),
+                            child: const Padding(
+                              padding: EdgeInsets.all(4),
+                              child: Icon(
+                                Icons.cloud_download_outlined,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   if (film.remarks.isNotEmpty || film.cName.isNotEmpty)
                     Positioned(

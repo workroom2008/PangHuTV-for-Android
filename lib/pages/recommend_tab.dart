@@ -155,11 +155,12 @@ class _RecommendTabState extends State<RecommendTab> {
     }
   }
 
+  int get _homeFilmLimit => _sourceScope.activeId.isNotEmpty ? 8 : 12;
+
   List<HomeSection> _visibleSections() {
     return _sections.where((s) {
       if (!s.nav.show) return false;
-      final films = s.movies.isNotEmpty ? s.movies : s.hot;
-      return films.isNotEmpty;
+      return s.movies.isNotEmpty || s.hot.isNotEmpty;
     }).toList();
   }
 
@@ -183,8 +184,15 @@ class _RecommendTabState extends State<RecommendTab> {
     }
   }
 
-  void _openFilter(int pid) {
-    Navigator.pushNamed(context, '/filter', arguments: {'Pid': '$pid'});
+  void _openFilter(int pid, {String category = ''}) {
+    Navigator.pushNamed(
+      context,
+      '/filter',
+      arguments: {
+        'Pid': '$pid',
+        if (category.isNotEmpty) 'Category': category,
+      },
+    );
   }
 
   Widget _collectSourceBar(bool wide, double leftInset, double rightInset) {
@@ -519,16 +527,35 @@ class _RecommendTabState extends State<RecommendTab> {
                     ),
                   ),
                 ),
-              ...sections.map((section) {
-                final movies = section.movies.isNotEmpty ? section.movies : section.hot;
-                return FilmRow(
-                  title: section.nav.name,
-                  films: movies,
-                  pid: section.nav.id,
-                  leftInset: leftInset,
-                  rightInset: rightInset,
-                  onMore: () => _openFilter(section.nav.id),
-                );
+              ...sections.expand((section) {
+                final limit = _homeFilmLimit;
+                final rows = <Widget>[];
+                final subs = section.nav.children.where((c) => c.show).toList();
+                if (section.movies.isNotEmpty) {
+                  rows.add(FilmRow(
+                    title: section.nav.name,
+                    films: section.movies,
+                    maxItems: limit,
+                    pid: section.nav.id,
+                    subCategories: subs,
+                    leftInset: leftInset,
+                    rightInset: rightInset,
+                    onMore: () => _openFilter(section.nav.id),
+                    onSubCategory: (cid) => _openFilter(section.nav.id, category: '$cid'),
+                  ));
+                }
+                if (section.hot.isNotEmpty) {
+                  rows.add(FilmRow(
+                    title: '热播${section.nav.name}',
+                    films: section.hot,
+                    maxItems: limit,
+                    pid: section.nav.id,
+                    leftInset: leftInset,
+                    rightInset: rightInset,
+                    onMore: () => _openFilter(section.nav.id),
+                  ));
+                }
+                return rows;
               }),
               const SizedBox(height: AppTheme.spaceSm),
             ],

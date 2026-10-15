@@ -106,8 +106,16 @@ class FilmApi {
     return ApiParser.parseSearch(res.data);
   }
 
-  static Future<FilterResult> getFilter(Map<String, dynamic> query) async {
-    final res = await HttpClient.instance.get('/filmClassifySearch', params: query);
+  static Future<FilterResult> getFilter(
+    Map<String, dynamic> query, {
+    String sourceId = '',
+  }) async {
+    final params = Map<String, dynamic>.from(query);
+    final sid = sourceId.trim();
+    if (sid.isNotEmpty) {
+      params['source'] = sid;
+    }
+    final res = await HttpClient.instance.get('/filmClassifySearch', params: params);
     if (res.code != 0 || res.data == null) {
       throw Exception(res.msg.isNotEmpty ? res.msg : '筛选数据获取失败');
     }

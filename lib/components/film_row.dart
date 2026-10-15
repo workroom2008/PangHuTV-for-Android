@@ -10,7 +10,10 @@ class FilmRow extends StatelessWidget {
   final List<MovieBasicInfo> films;
   final String moreText;
   final int pid;
+  final int? maxItems;
+  final List<CategoryItem> subCategories;
   final VoidCallback? onMore;
+  final void Function(int categoryId)? onSubCategory;
   final double? leftInset;
   final double? rightInset;
 
@@ -20,7 +23,10 @@ class FilmRow extends StatelessWidget {
     required this.films,
     this.moreText = '查看全部',
     this.pid = 0,
+    this.maxItems,
+    this.subCategories = const [],
     this.onMore,
+    this.onSubCategory,
     this.leftInset,
     this.rightInset,
   });
@@ -33,9 +39,17 @@ class FilmRow extends StatelessWidget {
     }
   }
 
+  List<MovieBasicInfo> get _displayFilms {
+    if (maxItems == null || maxItems! <= 0 || films.length <= maxItems!) {
+      return films;
+    }
+    return films.sublist(0, maxItems!);
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (films.isEmpty) {
+    final display = _displayFilms;
+    if (display.isEmpty) {
       return const SizedBox.shrink();
     }
     final padding = MediaQuery.paddingOf(context);
@@ -132,6 +146,43 @@ class FilmRow extends StatelessWidget {
               ],
             ),
           ),
+          if (subCategories.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(
+                left: AppTheme.spaceLg + left,
+                right: AppTheme.spaceLg + right,
+                bottom: AppTheme.spaceSm,
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: subCategories.take(6).map((child) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ActionChip(
+                        label: Text(child.name),
+                        onPressed: () {
+                          if (onSubCategory != null) {
+                            onSubCategory!(child.id);
+                          } else if (pid > 0) {
+                            Navigator.pushNamed(
+                              context,
+                              '/filter',
+                              arguments: {
+                                'Pid': '$pid',
+                                'Category': '${child.id}',
+                              },
+                            );
+                          }
+                        },
+                        backgroundColor: AppTheme.bgElevated,
+                        labelStyle: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
           SizedBox(
             height: rowHeight,
             child: ListView.separated(
@@ -140,12 +191,12 @@ class FilmRow extends StatelessWidget {
                   left: AppTheme.spaceLg + left,
                   right: AppTheme.spaceLg + right,
                 ),
-                itemCount: films.length,
+                itemCount: display.length,
                 separatorBuilder: (context, index) =>
                     const SizedBox(width: AppTheme.spaceSm),
                 itemBuilder: (context, index) {
                   return FilmCard(
-                    film: films[index],
+                    film: display[index],
                     cardWidth: cardW,
                   );
                 },

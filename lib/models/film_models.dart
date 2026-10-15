@@ -253,10 +253,25 @@ class FilterSearchMeta {
   });
 }
 
+/// 片库子分类快捷入口（对齐服务端 subNav）
+class ClassifySubNavItem {
+  final int id;
+  final int pid;
+  final String name;
+
+  ClassifySubNavItem({
+    required this.id,
+    required this.pid,
+    required this.name,
+  });
+}
+
 /// 筛选结果
 class FilterResult {
   final String titleName;
   final int titleId;
+  final int resolvedPid;
+  final List<ClassifySubNavItem> subNav;
   final List<MovieBasicInfo> list;
   final PageInfo page;
   final List<String> params;
@@ -266,6 +281,8 @@ class FilterResult {
   FilterResult({
     required this.titleName,
     required this.titleId,
+    this.resolvedPid = 0,
+    this.subNav = const [],
     required this.list,
     required this.page,
     this.params = const [],

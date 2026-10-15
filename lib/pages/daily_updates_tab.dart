@@ -62,6 +62,9 @@ class _DailyUpdatesTabState extends State<DailyUpdatesTab> with TickerProviderSt
 
   Future<void> _boot() async {
     await _sourceScope.ensureLoaded();
+    try {
+      await AppCatalogService.instance.refresh();
+    } catch (_) {}
     _reloadCatalog();
     if (!_hasLoaded) {
       _loadMeta(fromPull: false);
@@ -160,9 +163,14 @@ class _DailyUpdatesTabState extends State<DailyUpdatesTab> with TickerProviderSt
         _errorText = '';
       });
       _syncChipKeys();
-      if (_pageController.hasClients) {
-        _pageController.jumpToPage(0);
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_pageController.hasClients) return;
+        final maxIndex = _categories.isEmpty ? 0 : _categories.length - 1;
+        final target = _currentIndex.clamp(0, maxIndex);
+        if (_pageController.page?.round() != target) {
+          _pageController.jumpToPage(target);
+        }
+      });
       if (fromPull && _ready) {
         _toast('已更新');
       }
@@ -538,7 +546,7 @@ class _DailyUpdatesTabState extends State<DailyUpdatesTab> with TickerProviderSt
         },
         itemBuilder: (context, index) {
           final cat = _categories[index];
-          final active = (index - _currentIndex).abs() <= 1;
+          final active = index == _currentIndex;
           final isSeed = cat.pid == _seedPid;
           final paneKey =
               'daily_pane_${cat.pid}_${_sourceScope.activeId}_${_reloadToken}_${isSeed ? 0 : _siblingResetToken}';

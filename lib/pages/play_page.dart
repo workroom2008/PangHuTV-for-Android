@@ -13,6 +13,7 @@ import '../utils/source_guard.dart';
 import '../utils/format_util.dart';
 import '../utils/split_cutout_insets.dart';
 import '../utils/app_settings_manager.dart';
+import '../components/player/play_download_row.dart';
 import '../components/player/video_player_widget.dart';
 import '../components/player/live_play_body.dart';
 import '../components/loading_view.dart';
@@ -485,6 +486,11 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
       related: _related,
       onOpenRelated: _openRelated,
       sourceName: _sourceName,
+      downloadRow: PlayDownloadRow(
+        key: ValueKey('dl:$_filmId:$_episodeIndex'),
+        filmId: _filmId,
+        episodeNo: _episodeIndex + 1,
+      ),
     );
   }
 }

@@ -28,6 +28,7 @@ class LivePlayBody extends StatelessWidget {
   final List<MovieBasicInfo> related;
   final void Function(MovieBasicInfo film) onOpenRelated;
   final String sourceName;
+  final Widget? downloadRow;
 
   const LivePlayBody({
     super.key,
@@ -52,6 +53,7 @@ class LivePlayBody extends StatelessWidget {
     required this.related,
     required this.onOpenRelated,
     required this.sourceName,
+    this.downloadRow,
   });
 
   Widget _buildSideTabs(BuildContext context, {required int columns, bool split = false, double rightInset = 0}) {
@@ -96,7 +98,12 @@ class LivePlayBody extends StatelessWidget {
         children: [
           Expanded(
             flex: 7,
-            child: playerWidget,
+            child: Column(
+              children: [
+                Expanded(child: playerWidget),
+                if (downloadRow != null) downloadRow!,
+              ],
+            ),
           ),
           Container(width: 1, color: const Color(0x24FFFFFF)),
           Expanded(
@@ -127,6 +134,7 @@ class LivePlayBody extends StatelessWidget {
           aspectRatio: 16 / 9,
           child: playerWidget,
         ),
+        if (downloadRow != null) downloadRow!,
         Container(height: 8, color: AppTheme.bgElevated),
         Expanded(
           child: _buildSideTabs(

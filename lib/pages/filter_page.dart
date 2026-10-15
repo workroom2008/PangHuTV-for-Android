@@ -4,6 +4,7 @@ import '../models/film_models.dart';
 import '../api/film_api.dart';
 import '../api/http_client.dart';
 import '../utils/source_guard.dart';
+import '../utils/collect_source_scope.dart';
 import '../utils/favorite_manager.dart';
 import '../utils/breakpoint.dart';
 import '../components/film_card.dart';
@@ -47,8 +48,10 @@ class _FilterPageState extends State<FilterPage> {
 
   List<String> _sortList = [], _titleKeys = [], _titles = [], _tagKeys = [];
   List<List<String>> _tagNames = [], _tagValues = [];
+  List<ClassifySubNavItem> _subNav = [];
 
   final Map<String, String> _selected = {};
+  final _sourceScope = CollectSourceScope.instance;
   final ScrollController _scrollController = ScrollController();
   bool _showTopFab = false;
 
@@ -100,6 +103,10 @@ class _FilterPageState extends State<FilterPage> {
     _selected.forEach((k, v) {
       if (v.isNotEmpty) query[k] = v;
     });
+    final sid = _sourceScope.activeId.trim();
+    if (sid.isNotEmpty) {
+      query['source'] = sid;
+    }
     return query;
   }
 
@@ -165,10 +172,21 @@ class _FilterPageState extends State<FilterPage> {
 
     var ok = false;
     try {
-      final res = await FilmApi.getFilter(_buildQuery(page));
+      final res = await FilmApi.getFilter(
+        _buildQuery(page),
+        sourceId: _sourceScope.activeId,
+      );
       if (!mounted) return;
+      final resolved = res.resolvedPid > 0 ? '${res.resolvedPid}' : '';
+      if (reset && resolved.isNotEmpty && resolved != _pid) {
+        _pid = resolved;
+        _fetchLock = false;
+        await _loadData(true, fromPull: fromPull);
+        return;
+      }
       setState(() {
         _titleName = res.titleName.isNotEmpty ? res.titleName : '片库';
+        _subNav = res.subNav;
         _total = res.page.total;
         _current = res.page.current;
         _pageCount = res.page.pageCount;
@@ -180,7 +198,7 @@ class _FilterPageState extends State<FilterPage> {
         _tagNames = res.search.tagNames;
         _tagValues = res.search.tagValues;
         if (reset) _applyParams(res.paramKeys, res.params);
-        _errorText = _titleName.isNotEmpty ? '' : '当前分类已失效';
+        _errorText = res.titleName.isNotEmpty ? '' : '当前分类已失效，请从首页重新进入';
         ok = _errorText.isEmpty;
       });
       if (reset) {
@@ -299,6 +317,7 @@ class _FilterPageState extends State<FilterPage> {
                           floating: true,
                           delegate: StickyAppbar(child: _navBar(showPills: true)),
                         ),
+                        if (_subNav.isNotEmpty) SliverToBoxAdapter(child: _subNavBar()),
                         ..._bodySlivers(),
                       ],
                     ),
@@ -376,6 +395,33 @@ class _FilterPageState extends State<FilterPage> {
         ),
       ),
     ];
+  }
+
+  Widget _subNavBar() {
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: AppTheme.spaceMd),
+        itemCount: _subNav.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final item = _subNav[index];
+          final active = _selectedOf('Category') == '${item.id}';
+          return ChoiceChip(
+            label: Text(item.name),
+            selected: active,
+            onSelected: (_) => _pick('Category', '${item.id}'),
+            selectedColor: AppTheme.accent.withValues(alpha: 0.35),
+            backgroundColor: AppTheme.bgCard,
+            labelStyle: TextStyle(
+              fontSize: 12,
+              color: active ? AppTheme.textPrimary : AppTheme.textSecondary,
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Widget _navBar({required bool showPills}) {

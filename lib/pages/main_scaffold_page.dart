@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../common/app_branding.dart';
 import '../common/app_theme.dart';
@@ -5,6 +7,7 @@ import '../models/film_models.dart';
 import '../api/film_api.dart';
 import '../services/app_catalog_service.dart';
 import '../services/auth_session.dart';
+import '../services/front_download_service.dart';
 import '../utils/server_config_manager.dart';
 import '../utils/site_heartbeat.dart';
 import '../utils/collect_source_scope.dart';
@@ -103,6 +106,8 @@ class _MainScaffoldPageState extends State<MainScaffoldPage> with WidgetsBinding
   }
 
   void _onReconnect() {
+    FrontDownloadService.instance.reset();
+    unawaited(FrontDownloadService.instance.refresh());
     _loadSite(false);
   }
 
@@ -176,6 +181,7 @@ class _MainScaffoldPageState extends State<MainScaffoldPage> with WidgetsBinding
       );
     } catch (_) {}
 
+    unawaited(FrontDownloadService.instance.refresh());
     await _loadSite(false);
     HttpClient.instance.trackView('browse', '', 'IndexPage');
     SiteHeartbeat.instance.start();

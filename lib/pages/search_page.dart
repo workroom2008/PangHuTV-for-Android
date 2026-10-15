@@ -165,6 +165,9 @@ class _SearchPageState extends State<SearchPage> {
     _list = [];
     _sourceError = '';
     _loading = true;
+    if (_submitted.isNotEmpty && id.isNotEmpty) {
+      _fetchSource(_searchGen, _submitted, id);
+    }
   }
 
   void _patchTab(String id, {int? count, bool? loading}) {
@@ -272,8 +275,8 @@ class _SearchPageState extends State<SearchPage> {
               name: tab.name,
               count: tab.id.isEmpty
                   ? (tab.count > 0 ? tab.count : res.page.total)
-                  : (_cache[tab.id]?.page.total ?? tab.count),
-              loading: tab.id.isNotEmpty && !_cache.containsKey(tab.id),
+                  : tab.count,
+              loading: false,
             ),
         ];
         if (_source.isEmpty) {
@@ -283,19 +286,13 @@ class _SearchPageState extends State<SearchPage> {
           _loading = false;
         } else if (_cache[_source] != null) {
           _applySource(_source);
+        } else if (_source.isNotEmpty) {
+          _loading = true;
         }
       });
-      await Future.wait([
-        for (final tab in res.sources)
-          if (tab.id.isNotEmpty) _fetchSource(gen, kw, tab.id),
-      ]);
-      if (!mounted || gen != _searchGen) return;
-      setState(() {
-        _sources = [
-          for (final tab in _sources)
-            SearchSourceTab(id: tab.id, name: tab.name, count: tab.count, loading: false),
-        ];
-      });
+      if (_source.isNotEmpty && !_cache.containsKey(_source)) {
+        await _fetchSource(gen, kw, _source);
+      }
     } catch (_) {
       if (!mounted || gen != _searchGen) return;
       setState(() {

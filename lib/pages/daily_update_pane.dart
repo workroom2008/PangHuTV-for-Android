@@ -64,10 +64,13 @@ class _DailyUpdatePaneState extends State<DailyUpdatePane> with AutomaticKeepAli
   void didUpdateWidget(covariant DailyUpdatePane oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.reloadToken != oldWidget.reloadToken ||
-        widget.collectSourceId != oldWidget.collectSourceId) {
+        widget.collectSourceId != oldWidget.collectSourceId ||
+        widget.pid != oldWidget.pid) {
       _hasLoaded = false;
       _boot();
     } else if (widget.active && !_hasLoaded) {
+      _loadData(true, fromPull: false);
+    } else if (widget.active && !oldWidget.active && !_hasLoaded) {
       _loadData(true, fromPull: false);
     }
   }
@@ -89,7 +92,7 @@ class _DailyUpdatePaneState extends State<DailyUpdatePane> with AutomaticKeepAli
     if (widget.active) {
       _loadData(true, fromPull: false);
     } else {
-      _loading = true;
+      _loading = false;
     }
   }
 
@@ -224,6 +227,10 @@ class _DailyUpdatePaneState extends State<DailyUpdatePane> with AutomaticKeepAli
     final leftInset = media.padding.left;
     final rightInset = media.padding.right;
     final width = media.size.width;
+
+    if (!widget.active && _films.isEmpty && !_hasLoaded) {
+      return SizedBox(height: widget.headerHeight);
+    }
 
     if (_loading && _films.isEmpty) {
       return Padding(

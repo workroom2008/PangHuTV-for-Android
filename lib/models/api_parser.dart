@@ -86,8 +86,10 @@ class ApiParser {
       language: str(map, 'language'),
       classTag: str(map, 'classTag'),
       mid: str(map, 'mid'),
-      sourceId: str(map, 'sourceId'),
-      sourceMid: intVal(map, 'sourceMid'),
+      sourceId: _first([str(map, 'sourceId'), str(map, 'source_id')]),
+      sourceMid: intVal(map, 'sourceMid') > 0
+          ? intVal(map, 'sourceMid')
+          : intVal(map, 'source_mid'),
     );
   }
 
@@ -249,9 +251,25 @@ class ApiParser {
       tagValues: tagValues,
     );
 
+    final subNavRaw = listVal(map, 'subNav');
+    final subNav = <ClassifySubNavItem>[];
+    for (final item in subNavRaw) {
+      final sm = asMap(item);
+      final name = str(sm, 'name');
+      if (name.isEmpty) continue;
+      subNav.add(ClassifySubNavItem(
+        id: intVal(sm, 'id'),
+        pid: intVal(sm, 'pid'),
+        name: name,
+      ));
+    }
+
+    final titleMissing = map['title'] == null;
     return FilterResult(
-      titleName: str(titleObj, 'name', '全部'),
-      titleId: intVal(titleObj, 'id'),
+      titleName: titleMissing ? '' : str(titleObj, 'name', '全部'),
+      titleId: titleMissing ? 0 : intVal(titleObj, 'id'),
+      resolvedPid: intVal(map, 'resolvedPid'),
+      subNav: subNav,
       list: parseMovies(listVal(map, 'list')),
       page: parsePage(mapVal(map, 'page')),
       params: params,
