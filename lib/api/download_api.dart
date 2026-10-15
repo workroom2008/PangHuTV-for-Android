@@ -34,13 +34,16 @@ class DownloadApi {
   static Future<ApiResponse> submitTask({
     required String mid,
     required int episode,
+    String sourceId = '',
   }) async {
-    return HttpClient.instance.post(
-      '/download/tasks',
-      body: {
-        'mid': mid,
-        'episode': episode,
-      },
-    );
+    final body = <String, dynamic>{
+      'mid': mid,
+      'episode': episode,
+    };
+    final source = sourceId.trim();
+    if (source.isNotEmpty) {
+      body['source'] = source;
+    }
+    return HttpClient.instance.post('/download/tasks', body: body);
   }
 }

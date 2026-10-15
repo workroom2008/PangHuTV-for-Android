@@ -10,11 +10,13 @@ import '../../services/front_download_service.dart';
 class PlayDownloadRow extends StatefulWidget {
   final String filmId;
   final int episodeNo;
+  final String collectSourceId;
 
   const PlayDownloadRow({
     super.key,
     required this.filmId,
     required this.episodeNo,
+    this.collectSourceId = '',
   });
 
   @override
@@ -130,6 +132,7 @@ class _PlayDownloadRowState extends State<PlayDownloadRow> {
       final res = await DownloadApi.submitTask(
         mid: widget.filmId,
         episode: widget.episodeNo,
+        sourceId: widget.collectSourceId,
       );
       if (!mounted) return;
       if (res.code == 0) {

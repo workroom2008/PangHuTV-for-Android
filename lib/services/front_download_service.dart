@@ -25,9 +25,13 @@ class FrontDownloadService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> submitEpisode(String mid, int episode) async {
+  Future<bool> submitEpisode(String mid, int episode, {String sourceId = ''}) async {
     if (!isDownloadableFilmId(mid)) return false;
-    final res = await DownloadApi.submitTask(mid: mid, episode: episode);
+    final res = await DownloadApi.submitTask(
+      mid: mid,
+      episode: episode,
+      sourceId: sourceId,
+    );
     return res.code == 0;
   }
 }

@@ -240,6 +240,18 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
     return _sources.isNotEmpty ? _sources.first : null;
   }
 
+  String _downloadCollectSourceId() {
+    final fromLine = _findSource(_playingSourceId)?.sourceId.trim() ?? '';
+    if (fromLine.isNotEmpty) return fromLine;
+    final route = widget.sourceId.trim();
+    if (route.isEmpty) return '';
+    for (final s in _sources) {
+      if (s.sourceId == route) return route;
+      if (s.id == route && s.sourceId.isNotEmpty) return s.sourceId;
+    }
+    return route;
+  }
+
   void _selectEpisode(String sourceId, int index) {
     if (_playingSourceId == sourceId && _episodeIndex == index && _playUrl.isNotEmpty) {
       return;
@@ -487,9 +499,10 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
       onOpenRelated: _openRelated,
       sourceName: _sourceName,
       downloadRow: PlayDownloadRow(
-        key: ValueKey('dl:$_filmId:$_episodeIndex'),
+        key: ValueKey('dl:$_filmId:$_episodeIndex:$_playingSourceId'),
         filmId: _filmId,
         episodeNo: _episodeIndex + 1,
+        collectSourceId: _downloadCollectSourceId(),
       ),
     );
   }

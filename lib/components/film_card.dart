@@ -40,7 +40,11 @@ class FilmCard extends StatelessWidget {
     }
     if (!isDownloadableFilmId(id)) return;
     try {
-      final ok = await FrontDownloadService.instance.submitEpisode(id, 1);
+      final ok = await FrontDownloadService.instance.submitEpisode(
+        id,
+        1,
+        sourceId: film.sourceId,
+      );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(ok ? '下载任务已提交' : '提交失败')),
