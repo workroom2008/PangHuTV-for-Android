@@ -267,7 +267,14 @@ class HttpClient {
     };
   }
 
+  void _captureRefreshedToken(http.Response res) {
+    final raw = res.headers['x-auth-token'];
+    if (raw == null || raw.trim().isEmpty) return;
+    AuthSession.instance.saveToken(raw.trim());
+  }
+
   ApiResponse _parseHttpResponse(http.Response res) {
+    _captureRefreshedToken(res);
     if (res.statusCode == 401) {
       AuthGate.handleUnauthorized();
       throw Exception('请先登录');

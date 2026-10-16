@@ -88,7 +88,12 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     _isBuffering = false;
     _isPlaying = false;
     _playRequested = false;
-    _errorText = '视频加载失败: $e';
+    final detail = '$e';
+    if (_isDecoderInitError(e)) {
+      _errorText = '当前设备解码失败，请切换线路或换源后重试';
+    } else {
+      _errorText = '视频加载失败: $detail';
+    }
     notifyListeners();
     onStateChanged?.call();
   }
@@ -115,7 +120,19 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     _handleInitFailure(sessionId, error);
   }
 
-  Future<void> initPlayer(String videoUrl, {double initialTime = 0, bool autoPlay = true}) async {
+  static bool _isDecoderInitError(Object e) {
+    final s = e.toString();
+    return s.contains('MediaCodec') ||
+        s.contains('VideoError') ||
+        s.contains('MediaCodecVideoRenderer');
+  }
+
+  Future<void> initPlayer(
+    String videoUrl, {
+    double initialTime = 0,
+    bool autoPlay = true,
+    bool allowDecoderRetry = true,
+  }) async {
     final sessionId = ++_initSessionId;
     watcher.dispose();
 
@@ -204,6 +221,17 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
       watcher.clearOpenWatch();
       newController?.dispose().catchError((_) {});
       if (_controller == newController) _controller = null;
+      if (allowDecoderRetry && sessionId == _initSessionId && _isDecoderInitError(e)) {
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+        if (sessionId != _initSessionId) return;
+        await initPlayer(
+          videoUrl,
+          initialTime: initialTime,
+          autoPlay: autoPlay,
+          allowDecoderRetry: false,
+        );
+        return;
+      }
       _handleInitFailure(sessionId, e);
     }
   }
