@@ -9,6 +9,8 @@ import 'player_playback_controller.dart';
 import '../cast/player_cast_controller.dart';
 import '../cast/player_cast_hud.dart';
 import '../../types/dlna_types.dart';
+import '../../utils/app_settings_manager.dart';
+import '../../utils/external_player.dart';
 
 /// 跨平台视频播放器，全量对齐 OHOS `VideoPlayer.ets`
 class VideoPlayerWidget extends StatefulWidget {
@@ -114,6 +116,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget>
       _syncAutoPip();
       _pipCoord.updateAspectRatio(_playback.controller?.value.size);
     };
+    _playback.onHardwareDecodeFailed = (url) => ExternalPlayer.open(url);
 
     _pipCoord = PlayerPipCoordinator(
       onStateChanged: () {
@@ -135,7 +138,27 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget>
     )..init();
 
     _playback.loadWindowLevels();
-    _playback.initPlayer(widget.videoUrl, initialTime: widget.initialTime);
+    _beginPlayback();
+  }
+
+  Future<void> _beginPlayback({double? initialTime}) async {
+    if (_castCtrl.isCasting) return;
+    final t = initialTime ?? widget.initialTime;
+    final raw = widget.videoUrl.trim();
+    if (raw.isEmpty) {
+      await _playback.initPlayer(raw, initialTime: t);
+      return;
+    }
+    if (AppSettingsManager.instance.preferExternalPlayer) {
+      final ok = await ExternalPlayer.open(raw);
+      if (!mounted) return;
+      if (ok) {
+        _playback.handoffToExternalPlayer();
+        return;
+      }
+      showToast('无法调起其它播放器，已改用内置播放');
+    }
+    await _playback.initPlayer(widget.videoUrl, initialTime: t);
   }
 
   @override
@@ -146,10 +169,10 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget>
       if (_castCtrl.isCasting) {
         final consumed = _castCtrl.handleSourceChange();
         if (!consumed) {
-          _playback.initPlayer(widget.videoUrl);
+          _beginPlayback();
         }
       } else {
-        _playback.initPlayer(widget.videoUrl);
+        _beginPlayback();
       }
     }
     if (oldWidget.hasPrev != widget.hasPrev || oldWidget.hasNext != widget.hasNext) {
@@ -416,9 +439,16 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget>
                 onScale: _playback.cycleScale,
                 onRetry: () {
                   if (!_castCtrl.isCasting) {
-                    _playback.initPlayer(widget.videoUrl);
+                    _beginPlayback(initialTime: _playback.currentPositionSec);
                   }
                 },
+                onExternalPlay: widget.videoUrl.trim().isEmpty
+                    ? null
+                    : () async {
+                        final ok = await ExternalPlayer.open(widget.videoUrl);
+                        if (!mounted) return;
+                        if (!ok) showToast('无法调起其它播放器，请安装 MX Player、VLC 等后重试');
+                      },
                 onPrev: widget.onPrev,
                 onNext: widget.onNext,
                 onSeekBack10: () {

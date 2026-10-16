@@ -11,6 +11,7 @@ class PlayerErrorPad extends StatelessWidget {
   final double bottomInset;
   final VoidCallback onRetry;
   final VoidCallback? onErrorDetail;
+  final VoidCallback? onExternalPlay;
 
   const PlayerErrorPad({
     super.key,
@@ -21,6 +22,7 @@ class PlayerErrorPad extends StatelessWidget {
     this.bottomInset = 0,
     required this.onRetry,
     this.onErrorDetail,
+    this.onExternalPlay,
   });
 
   void _showDetailDialog(BuildContext context) {
@@ -82,8 +84,10 @@ class PlayerErrorPad extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 16),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 12,
+                runSpacing: 10,
                 children: [
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
@@ -95,7 +99,18 @@ class PlayerErrorPad extends StatelessWidget {
                     onPressed: onRetry,
                     child: const Text('重新播放', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                   ),
-                  const SizedBox(width: 12),
+                  if (onExternalPlay != null)
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        backgroundColor: Colors.white.withValues(alpha: 0.12),
+                        side: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                      ),
+                      onPressed: onExternalPlay,
+                      child: const Text('其它播放器', style: TextStyle(fontSize: 13)),
+                    ),
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,

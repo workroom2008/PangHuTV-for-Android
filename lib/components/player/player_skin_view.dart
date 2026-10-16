@@ -42,6 +42,7 @@ class PlayerSkinView extends StatelessWidget {
   final VoidCallback? onScale;
   final VoidCallback onRetry;
   final VoidCallback? onErrorDetail;
+  final VoidCallback? onExternalPlay;
   final VoidCallback? onPrev;
   final VoidCallback? onNext;
   final VoidCallback onSeekBack10;
@@ -91,6 +92,7 @@ class PlayerSkinView extends StatelessWidget {
     this.onScale,
     required this.onRetry,
     this.onErrorDetail,
+    this.onExternalPlay,
     this.onPrev,
     this.onNext,
     required this.onSeekBack10,
@@ -323,6 +325,7 @@ class PlayerSkinView extends StatelessWidget {
             bottomInset: bottomInset,
             onRetry: onRetry,
             onErrorDetail: onErrorDetail,
+            onExternalPlay: onExternalPlay,
           ),
         if (isFull)
           Positioned(

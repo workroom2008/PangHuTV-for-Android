@@ -61,6 +61,8 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
   VoidCallback? onEnded;
   void Function(double current, double duration)? onProgress;
   VoidCallback? onStateChanged;
+  /// 内置 ExoPlayer 硬解失败且已重试后，由 UI 调起第三方播放器；返回 true 表示已成功调起。
+  Future<bool> Function(String rawVideoUrl)? onHardwareDecodeFailed;
 
   bool get isReady => _controller != null && _controller!.value.isInitialized && !_isOpening;
 
@@ -82,7 +84,7 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     onStateChanged?.call();
   }
 
-  void _handleInitFailure(int sessionId, Object e) {
+  void _handleInitFailure(int sessionId, Object e, {bool externalPlayerOpened = false}) {
     if (sessionId != _initSessionId) return;
     _isOpening = false;
     _isBuffering = false;
@@ -90,7 +92,9 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     _playRequested = false;
     final detail = '$e';
     if (_isDecoderInitError(e)) {
-      _errorText = '当前设备解码失败，请切换线路或换源后重试';
+      _errorText = externalPlayerOpened
+          ? '本机硬解失败，已调起其它播放器'
+          : '当前设备解码失败，请点「其它播放器」或切换线路';
     } else {
       _errorText = '视频加载失败: $detail';
     }
@@ -232,7 +236,15 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
         );
         return;
       }
-      _handleInitFailure(sessionId, e);
+      var externalOpened = false;
+      if (sessionId == _initSessionId &&
+          _isDecoderInitError(e) &&
+          onHardwareDecodeFailed != null) {
+        try {
+          externalOpened = await onHardwareDecodeFailed!(videoUrl);
+        } catch (_) {}
+      }
+      _handleInitFailure(sessionId, e, externalPlayerOpened: externalOpened);
     }
   }
 
@@ -361,6 +373,11 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     _isBuffering = false;
     watcher.clearHide();
     notifyListeners();
+  }
+
+  /// 释放内置播放器会话（第三方播放器接管或换源前）。
+  void handoffToExternalPlayer() {
+    parkForCast();
   }
 
   void parkForCast() {

@@ -32,6 +32,13 @@ void main() {
       expect(ctrl.isPlaying, isFalse);
     });
 
+    test('MediaCodec failure shows external player hint', () {
+      final ctrl = PlayerPlaybackController();
+      ctrl.debugArmOpeningSession();
+      ctrl.debugLateInitFailure(ctrl.initSessionId, 'MediaCodecVideoRenderer: decode failed');
+      expect(ctrl.errorText, contains('其它播放器'));
+    });
+
     test('initPlayer with empty url does not report error and keeps silent state', () async {
       final ctrl = PlayerPlaybackController();
       await ctrl.initPlayer('');
