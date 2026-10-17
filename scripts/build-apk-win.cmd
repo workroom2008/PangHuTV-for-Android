@@ -15,5 +15,6 @@ if not exist "android\local.properties" (
   echo [build] 已生成 android\local.properties
 )
 call flutter pub get
-call flutter build apk --release --split-per-abi
+rem 仅 arm64 真机包，不产出 armeabi-v7a / x86_64
+call flutter build apk --release --target-platform android-arm64
 endlocal
