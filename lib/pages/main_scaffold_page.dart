@@ -13,10 +13,13 @@ import '../utils/site_heartbeat.dart';
 import '../utils/collect_source_scope.dart';
 import '../utils/source_guard.dart';
 import '../utils/app_version_util.dart';
+import '../utils/auth_requirement.dart';
 import '../api/http_client.dart';
 import '../components/notice_dialog.dart';
 import '../components/version_update_dialog.dart';
 import '../components/loading_view.dart';
+import '../components/adaptive_content.dart';
+import '../utils/breakpoint.dart';
 import 'recommend_tab.dart';
 import 'daily_updates_tab.dart';
 import 'profile_tab.dart';
@@ -167,7 +170,14 @@ class _MainScaffoldPageState extends State<MainScaffoldPage> with WidgetsBinding
       }
       return;
     }
-    if (!AuthSession.instance.isLoggedIn) {
+    BasicConfig siteConfig;
+    try {
+      siteConfig = await FilmApi.getSiteConfig(force: false);
+    } catch (_) {
+      siteConfig = BasicConfig();
+    }
+    if (AuthRequirement.mustLogin(siteConfig: siteConfig) &&
+        !AuthSession.instance.isLoggedIn) {
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/login');
       }
@@ -219,84 +229,164 @@ class _MainScaffoldPageState extends State<MainScaffoldPage> with WidgetsBinding
     });
   }
 
+  Widget _buildTabStack() {
+    return IndexedStack(
+      index: _currentTabIndex,
+      children: [
+        if (_tabReady[0])
+          RecommendTab(
+            siteName: _siteName,
+            onOpenSearch: () => Navigator.pushNamed(context, '/search'),
+          )
+        else
+          const SizedBox.shrink(),
+        if (_tabReady[1]) const DailyUpdatesTab() else const SizedBox.shrink(),
+        if (_tabReady[2]) const ProfileTab() else const SizedBox.shrink(),
+      ],
+    );
+  }
+
+  Widget _buildMainBody(double width) {
+    if (!_ready) {
+      return const LoadingView(label: '正在接入服务');
+    }
+    if (!_siteOpen) {
+      return AdaptiveContent(child: _buildMaintenanceView());
+    }
+    final tabs = _buildTabStack();
+    if (Breakpoint.needsContentConstraint(width)) {
+      return AdaptiveContent(child: tabs);
+    }
+    return tabs;
+  }
+
+  Widget? _buildBottomNav() {
+    if (!_ready || !_siteOpen) return null;
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppTheme.bgElevated,
+        border: Border(top: BorderSide(color: AppTheme.border, width: 0.5)),
+      ),
+      child: BottomNavigationBar(
+        currentIndex: _currentTabIndex,
+        onTap: _selectTab,
+        items: [
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home_rounded),
+            label: '推荐',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.local_fire_department_outlined),
+            activeIcon: Icon(Icons.local_fire_department_rounded),
+            label: '更新',
+          ),
+          BottomNavigationBarItem(
+            icon: Stack(
+              children: [
+                const Icon(Icons.person_outline_rounded),
+                if (_hasAppUpdate)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppTheme.danger,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            activeIcon: const Icon(Icons.person_rounded),
+            label: '我的',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavigationRail(double width) {
+    final extended = width >= Breakpoint.xl;
+    return NavigationRail(
+      extended: extended,
+      minExtendedWidth: 168,
+      backgroundColor: AppTheme.bgElevated,
+      indicatorColor: AppTheme.accent.withValues(alpha: 0.22),
+      selectedIconTheme: const IconThemeData(color: AppTheme.accent),
+      unselectedIconTheme: const IconThemeData(color: AppTheme.textMuted),
+      selectedLabelTextStyle: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+      unselectedLabelTextStyle: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+      labelType: extended ? NavigationRailLabelType.none : NavigationRailLabelType.all,
+      selectedIndex: _currentTabIndex,
+      onDestinationSelected: _selectTab,
+      destinations: [
+        const NavigationRailDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home_rounded),
+          label: Text('推荐'),
+        ),
+        const NavigationRailDestination(
+          icon: Icon(Icons.local_fire_department_outlined),
+          selectedIcon: Icon(Icons.local_fire_department_rounded),
+          label: Text('更新'),
+        ),
+        NavigationRailDestination(
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Icon(Icons.person_outline_rounded),
+              if (_hasAppUpdate)
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppTheme.danger,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          selectedIcon: const Icon(Icons.person_rounded),
+          label: const Text('我的'),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final showNoticeOverlay = _showNotice && _ready && _siteOpen;
     final showUpdateOverlay = _showUpdateDialog && AppVersionUtil.getCachedUpdateInfo() != null;
     final hasModalOverlay = showNoticeOverlay || showUpdateOverlay;
 
+    final width = MediaQuery.sizeOf(context).width;
+    final useRail = _ready && _siteOpen && Breakpoint.useNavigationRail(width);
+    final mainBody = _buildMainBody(width);
+
     final scaffold = Scaffold(
       backgroundColor: AppTheme.bg,
-      body: !_ready
-          ? const LoadingView(label: '正在接入服务')
-          : !_siteOpen
-              ? _buildMaintenanceView()
-              : IndexedStack(
-                  index: _currentTabIndex,
-                  children: [
-                    if (_tabReady[0])
-                      RecommendTab(
-                        siteName: _siteName,
-                        onOpenSearch: () => Navigator.pushNamed(context, '/search'),
-                      )
-                    else
-                      const SizedBox.shrink(),
-                    if (_tabReady[1])
-                      const DailyUpdatesTab()
-                    else
-                      const SizedBox.shrink(),
-                    if (_tabReady[2])
-                      const ProfileTab()
-                    else
-                      const SizedBox.shrink(),
-                  ],
+      body: useRail
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SafeArea(
+                  right: false,
+                  bottom: false,
+                  child: _buildNavigationRail(width),
                 ),
-      bottomNavigationBar: _ready && _siteOpen
-          ? Container(
-              decoration: const BoxDecoration(
-                color: AppTheme.bgElevated,
-                border: Border(top: BorderSide(color: AppTheme.border, width: 0.5)),
-              ),
-              child: BottomNavigationBar(
-                currentIndex: _currentTabIndex,
-                onTap: _selectTab,
-                items: [
-                  const BottomNavigationBarItem(
-                    icon: Icon(Icons.home_outlined),
-                    activeIcon: Icon(Icons.home_rounded),
-                    label: '推荐',
-                  ),
-                  const BottomNavigationBarItem(
-                    icon: Icon(Icons.local_fire_department_outlined),
-                    activeIcon: Icon(Icons.local_fire_department_rounded),
-                    label: '更新',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Stack(
-                      children: [
-                        const Icon(Icons.person_outline_rounded),
-                        if (_hasAppUpdate)
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            child: Container(
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: AppTheme.danger,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    activeIcon: const Icon(Icons.person_rounded),
-                    label: '我的',
-                  ),
-                ],
-              ),
+                const VerticalDivider(width: 1, thickness: 0.5, color: AppTheme.border),
+                Expanded(child: mainBody),
+              ],
             )
-          : null,
+          : mainBody,
+      bottomNavigationBar: useRail ? null : _buildBottomNav(),
     );
 
     return PopScope(

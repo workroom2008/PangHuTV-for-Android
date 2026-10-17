@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../common/app_theme.dart';
 import '../models/film_models.dart';
 import '../utils/breakpoint.dart';
+import '../utils/format_util.dart';
 import 'search_result_item.dart';
 import 'empty_state.dart';
 
@@ -12,7 +13,10 @@ class SearchResultList extends StatelessWidget {
   final bool loadingMore;
   final String sourceError;
   final String submitted;
+  final String sourceId;
   final ScrollController scrollController;
+  final String? anchorFilmId;
+  final void Function(MovieBasicInfo film)? onFilmTap;
   final Future<void> Function() onRefresh;
 
   const SearchResultList({
@@ -22,7 +26,10 @@ class SearchResultList extends StatelessWidget {
     required this.loadingMore,
     required this.sourceError,
     required this.submitted,
+    this.sourceId = '',
     required this.scrollController,
+    this.anchorFilmId,
+    this.onFilmTap,
     required this.onRefresh,
   });
 
@@ -58,6 +65,7 @@ class SearchResultList extends StatelessWidget {
       color: AppTheme.accent,
       backgroundColor: AppTheme.bgCard,
       child: CustomScrollView(
+        key: PageStorageKey<String>('search_list_${submitted}_$sourceId'),
         controller: scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
@@ -75,10 +83,17 @@ class SearchResultList extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: AppTheme.spaceLg),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (context, index) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: SearchResultItem(film: list[index]),
-                  ),
+                  (context, index) {
+                    final film = list[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: SearchResultItem(
+                        film: film,
+                        highlighted: anchorFilmId != null && FormatUtil.filmId(film) == anchorFilmId,
+                        onSelect: onFilmTap,
+                      ),
+                    );
+                  },
                   childCount: list.length,
                 ),
               ),
@@ -94,7 +109,14 @@ class SearchResultList extends StatelessWidget {
                   mainAxisSpacing: 8,
                 ),
                 delegate: SliverChildBuilderDelegate(
-                  (context, index) => SearchResultItem(film: list[index]),
+                  (context, index) {
+                    final film = list[index];
+                    return SearchResultItem(
+                      film: film,
+                      highlighted: anchorFilmId != null && FormatUtil.filmId(film) == anchorFilmId,
+                      onSelect: onFilmTap,
+                    );
+                  },
                   childCount: list.length,
                 ),
               ),

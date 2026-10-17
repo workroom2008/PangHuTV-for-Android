@@ -35,6 +35,11 @@ class BasicConfig {
   final bool noticeShowInApp;
   final String noticeAppVersion;
   final String noticeVersion;
+  final bool privateAccess;
+  final bool requireWebLogin;
+
+  /// 与 Web `SiteGuard` 一致：私有化或全局强制 Web 登录时须账号。
+  bool get loginRequired => privateAccess || requireWebLogin;
 
   BasicConfig({
     this.siteName = AppBranding.displayName,
@@ -55,6 +60,8 @@ class BasicConfig {
     this.noticeShowInApp = true,
     this.noticeAppVersion = '',
     this.noticeVersion = '',
+    this.privateAccess = false,
+    this.requireWebLogin = false,
   });
 }
 

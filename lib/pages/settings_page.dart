@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import '../common/app_theme.dart';
 import '../components/page_header.dart';
 import '../api/auth_api.dart';
 import '../utils/app_settings_manager.dart';
+import 'external_player_picker_page.dart';
 
 /// 设置页面，全量对齐 OHOS `SettingsPage.ets`
 class SettingsPage extends StatefulWidget {
@@ -264,6 +267,38 @@ class _SettingsPageState extends State<SettingsPage> {
                                             value: preferExternalPlayer,
                                             onChanged: (v) => AppSettingsManager.instance.setPreferExternalPlayer(v),
                                           ),
+                                          if (preferExternalPlayer) ...[
+                                            _cardDivider(),
+                                            ListenableBuilder(
+                                              listenable: Listenable.merge([
+                                                AppSettingsManager.instance.externalPlayerLabelNotifier,
+                                                AppSettingsManager.instance.externalPlayerPackageNotifier,
+                                              ]),
+                                              builder: (context, _) {
+                                                return _buildActionRow(
+                                                      title: '选择播放器',
+                                                      subtitle: '指定 MX Player、VLC 等默认打开方式',
+                                                      extra: AppSettingsManager.instance.externalPlayerSummary(),
+                                                      onTap: () {
+                                                        if (!Platform.isAndroid) {
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            const SnackBar(
+                                                              content: Text('iOS 请使用系统分享/打开方式选择播放器'),
+                                                            ),
+                                                          );
+                                                          return;
+                                                        }
+                                                        Navigator.push(
+                                                          context,
+                                                          MaterialPageRoute(
+                                                            builder: (_) => const ExternalPlayerPickerPage(),
+                                                          ),
+                                                        );
+                                                      },
+                                                    );
+                                              },
+                                            ),
+                                          ],
                                         ],
                                       ),
                                     );

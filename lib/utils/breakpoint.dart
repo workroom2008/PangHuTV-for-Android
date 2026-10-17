@@ -15,12 +15,33 @@ class Breakpoint {
 
   static bool isWideWidth(double width) => isWide(ofWidth(width));
 
+  /// 内容区最大宽度（TV/平板横屏居中，避免卡片与 Banner 过度拉伸）
+  static double contentMaxWidth(double width) {
+    if (width <= md) return width;
+    if (width <= lg) return 920;
+    if (width <= xl) return 1120;
+    return 1280;
+  }
+
+  static double layoutWidth(double width) {
+    final max = contentMaxWidth(width);
+    return width < max ? width : max;
+  }
+
+  static bool needsContentConstraint(double width) => layoutWidth(width) < width - 1;
+
+  /// 大屏主框架用侧栏导航（替代底部 Tab）
+  static bool useNavigationRail(double width) => width >= lg;
+
+  static const double maxCardWidth = 176;
+
   static int gridColsOf(double width) {
-    final bp = ofWidth(width);
-    if (width >= xl || bp == 'xl') return 8;
-    if (width >= 1100) return 7;
-    if (width >= lg || bp == 'lg') return 6;
-    if (width >= md || bp == 'md') return 4;
+    final w = layoutWidth(width);
+    final bp = ofWidth(w);
+    if (w >= xl || bp == 'xl') return 8;
+    if (w >= 1100) return 7;
+    if (w >= lg || bp == 'lg') return 6;
+    if (w >= md || bp == 'md') return 4;
     return 3;
   }
 
@@ -39,11 +60,12 @@ class Breakpoint {
     int? columns,
     double gap = 8.0,
   }) {
-    final w = windowWidth ?? width;
+    final w = layoutWidth(windowWidth ?? width);
     final cols = columns ?? gridColsOf(w);
     final available = w - horizontalPadding;
     if (available <= 0 || cols <= 0) return 104.0;
     final cardW = (available - (cols - 1) * gap) / cols;
+    if (cardW > maxCardWidth) return maxCardWidth;
     return cardW < 104 ? 104.0 : cardW;
   }
 
@@ -60,10 +82,11 @@ class Breakpoint {
     double horizontalPadding = 24.0,
     double crossAxisSpacing = 8.0,
   }) {
-    final available = width - horizontalPadding;
+    final w = layoutWidth(width);
+    final available = w - horizontalPadding;
     if (available <= 0 || columns <= 0) return 0.52;
     final cardW = (available - (columns - 1) * crossAxisSpacing) / columns;
-    return filmCardAspectRatio(cardW);
+    return filmCardAspectRatio(cardW.clamp(104.0, maxCardWidth));
   }
 
   static double bannerHeight({

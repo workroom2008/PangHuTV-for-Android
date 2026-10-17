@@ -1,5 +1,6 @@
 import '../services/auth_session.dart';
 import '../services/app_catalog_service.dart';
+import '../services/auth_gate.dart';
 import 'http_client.dart';
 
 class AuthApi {
@@ -20,15 +21,20 @@ class AuthApi {
       throw Exception('服务端未返回 token');
     }
     await AuthSession.instance.saveToken(token);
+    AuthGate.markLoggedIn();
     AppCatalogService.instance.clear();
     await AppCatalogService.instance.refresh(force: true);
   }
 
-  static Future<void> logout() async {
-    try {
-      await HttpClient.instance.post('/logout');
-    } catch (_) {}
+  static Future<void> logoutLocal() async {
     await AuthSession.instance.clear();
     AppCatalogService.instance.clear();
+  }
+
+  static Future<void> logout() async {
+    try {
+      await HttpClient.instance.post('/logout', skipUnauthorizedRedirect: true);
+    } catch (_) {}
+    await logoutLocal();
   }
 }

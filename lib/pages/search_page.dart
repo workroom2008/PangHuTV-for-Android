@@ -6,10 +6,13 @@ import '../api/http_client.dart';
 import '../utils/search_history_manager.dart';
 import '../utils/source_guard.dart';
 import '../utils/favorite_manager.dart';
+import '../utils/format_util.dart';
+import '../utils/nav_util.dart';
 import '../components/search_source_tabs.dart';
 import '../components/search_suggest_pane.dart';
 import '../components/search_result_list.dart';
 import '../components/loading_view.dart';
+import '../components/adaptive_content.dart';
 
 const List<String> _defaultHotKeywords = [
   '凡人修仙传', '庆余年', '仙逆', '吞噬星空', '遮天', '斗破苍穹', '白夜破晓', '大奉打更人'
@@ -41,6 +44,8 @@ class _SearchPageState extends State<SearchPage> {
   final Map<String, _CachedSource> _cache = {};
   int _searchGen = 0;
   String _sourceError = '';
+  String? _anchorFilmId;
+  double? _pendingRestoreOffset;
 
   @override
   void initState() {
@@ -77,9 +82,6 @@ class _SearchPageState extends State<SearchPage> {
     FavoriteManager.preload();
     _loadHistory();
     _loadHotKeywords();
-    if (_submitted.isNotEmpty) {
-      _doSearch(true);
-    }
   }
 
   void _onScroll() {
@@ -210,6 +212,39 @@ class _SearchPageState extends State<SearchPage> {
     });
   }
 
+  Future<void> _openPlayFromSearch(MovieBasicInfo film) async {
+    if (_scrollController.hasClients) {
+      _pendingRestoreOffset = _scrollController.offset;
+    }
+    final filmId = FormatUtil.filmId(film);
+    _anchorFilmId = filmId;
+    await NavUtil.openPlay(
+      context,
+      filmId,
+      sourceId: film.sourceId,
+      sourceMid: film.sourceMid > 0 ? '${film.sourceMid}' : '',
+      title: film.name,
+    );
+    if (!mounted) return;
+    setState(() {});
+    _restoreSearchScroll();
+  }
+
+  void _restoreSearchScroll() {
+    final offset = _pendingRestoreOffset;
+    if (offset == null) return;
+    void apply() {
+      if (!mounted || !_scrollController.hasClients) return;
+      final max = _scrollController.position.maxScrollExtent;
+      _scrollController.jumpTo(offset.clamp(0.0, max));
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      apply();
+      WidgetsBinding.instance.addPostFrameCallback((_) => apply());
+    });
+  }
+
   Future<void> _doSearch(bool reset, {bool keepSource = false}) async {
     final kw = _inputController.text.trim();
     if (kw.isEmpty) {
@@ -251,6 +286,8 @@ class _SearchPageState extends State<SearchPage> {
 
     if (!keepSource) {
       _source = '';
+      _anchorFilmId = null;
+      _pendingRestoreOffset = null;
     }
     _sourceError = '';
     final gen = ++_searchGen;
@@ -313,8 +350,9 @@ class _SearchPageState extends State<SearchPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.bg,
-      body: SafeArea(
-        child: Column(
+      body: AdaptiveContent(
+        child: SafeArea(
+          child: Column(
           children: [
             // Top Search Input Bar
             Padding(
@@ -434,6 +472,7 @@ class _SearchPageState extends State<SearchPage> {
               ),
             ),
           ],
+          ),
         ),
       ),
     );
@@ -446,8 +485,17 @@ class _SearchPageState extends State<SearchPage> {
       loadingMore: _loadingMore,
       sourceError: _sourceError,
       submitted: _submitted,
+      sourceId: _source,
       scrollController: _scrollController,
-      onRefresh: () => _doSearch(true, keepSource: true),
+      anchorFilmId: _anchorFilmId,
+      onFilmTap: _openPlayFromSearch,
+      onRefresh: () async {
+        if (_scrollController.hasClients) {
+          _pendingRestoreOffset = _scrollController.offset;
+        }
+        await _doSearch(true, keepSource: true);
+        if (mounted) _restoreSearchScroll();
+      },
     );
   }
 }

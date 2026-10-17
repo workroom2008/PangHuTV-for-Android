@@ -10,6 +10,7 @@ import 'package:ecohub_android/utils/format_util.dart';
 import 'package:ecohub_android/utils/history_manager.dart';
 import 'package:ecohub_android/utils/play_resume.dart';
 import 'package:ecohub_android/utils/server_config_manager.dart';
+import 'package:ecohub_android/services/auth_session.dart';
 import 'package:ecohub_android/components/film_card.dart';
 import 'package:ecohub_android/components/search_result_item.dart';
 
@@ -142,6 +143,7 @@ void main() {
 
     final serverUrl = 'http://${server.address.host}:${server.port}?key=secret123';
     await ServerConfigManager.instance.setServerUrl(serverUrl);
+    await AuthSession.instance.saveToken('unit-test-token');
 
     HttpClient.instance.trackView('classify', '1', 'DailyUpdatesTab', '', '电影', '测试片');
 

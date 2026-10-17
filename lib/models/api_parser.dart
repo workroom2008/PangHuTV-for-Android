@@ -417,6 +417,10 @@ class ApiParser {
       noticeShowInApp: notice.containsKey('showInApp') ? boolVal(notice, 'showInApp', true) : true,
       noticeAppVersion: appVer,
       noticeVersion: appVer,
+      privateAccess: boolVal(map, 'privateAccess') ||
+          boolVal(map, 'private_access'),
+      requireWebLogin: boolVal(map, 'requireWebLogin') ||
+          boolVal(map, 'require_web_login'),
     );
   }
 

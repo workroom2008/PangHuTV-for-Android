@@ -8,7 +8,6 @@ import '../services/auth_gate.dart';
 import '../services/auth_session.dart';
 import '../utils/server_config_manager.dart';
 import '../utils/source_guard.dart';
-import '../utils/site_heartbeat.dart';
 import '../utils/app_version_util.dart';
 
 class ApiResponse {
@@ -99,6 +98,7 @@ class HttpClient {
     String path, {
     Map<String, dynamic>? body,
     int timeoutMs = 15000,
+    bool skipUnauthorizedRedirect = false,
   }) async {
     final manager = ServerConfigManager.instance;
     final url = manager.buildApiUrl(path);
@@ -112,7 +112,7 @@ class HttpClient {
           body: jsonEncode(body ?? {}),
         )
         .timeout(Duration(milliseconds: timeoutMs));
-    return _parseHttpResponse(res);
+    return _parseHttpResponse(res, redirectOn401: !skipUnauthorizedRedirect);
   }
 
   void trackView(
@@ -159,6 +159,9 @@ class HttpClient {
         ? deviceModel.trim()
         : '${Platform.operatingSystem} ${Platform.operatingSystemVersion}'.trim();
     final provideKey = manager.provideKey;
+    final token = AuthSession.instance.token.trim();
+    // /stat/view 在 PrivateAccessGuard 下，无 Token 会 401 并反复跳转登录
+    if (token.isEmpty) return;
 
     try {
       await http.post(
@@ -169,6 +172,8 @@ class HttpClient {
           'User-Agent': userAgent,
           if (deviceId.isNotEmpty) 'X-Device-Id': deviceId,
           if (deviceId.isNotEmpty) 'Device-Id': deviceId,
+          'Authorization': 'Bearer $token',
+          'Token': token,
           if (provideKey.isNotEmpty) 'X-Provide-Key': provideKey,
         },
         body: jsonEncode({
@@ -273,10 +278,12 @@ class HttpClient {
     AuthSession.instance.saveToken(raw.trim());
   }
 
-  ApiResponse _parseHttpResponse(http.Response res) {
+  ApiResponse _parseHttpResponse(http.Response res, {bool redirectOn401 = true}) {
     _captureRefreshedToken(res);
     if (res.statusCode == 401) {
-      AuthGate.handleUnauthorized();
+      if (redirectOn401) {
+        AuthGate.handleUnauthorized();
+      }
       throw Exception('请先登录');
     }
     if (res.statusCode != 200) {
@@ -373,7 +380,6 @@ class HttpClient {
 
   Future<ApiResponse> _send(String url, int timeoutMs, {String? customKey}) async {
     final userAgent = await _resolveUserAgent();
-    final manager = ServerConfigManager.instance;
     try {
       var headers = await _authHeaders(userAgent);
       if (customKey != null && customKey.isNotEmpty &&

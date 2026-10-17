@@ -11,11 +11,13 @@ import '../utils/favorite_manager.dart';
 class SearchResultItem extends StatelessWidget {
   final MovieBasicInfo film;
   final void Function(MovieBasicInfo film)? onSelect;
+  final bool highlighted;
 
   const SearchResultItem({
     super.key,
     required this.film,
     this.onSelect,
+    this.highlighted = false,
   });
 
   String _resolvedPosterUrl() {
@@ -76,8 +78,15 @@ class SearchResultItem extends StatelessWidget {
     return InkWell(
       onTap: () => _handleClick(context),
       borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Container(
+        decoration: highlighted
+            ? BoxDecoration(
+                color: AppTheme.accent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                border: Border.all(color: AppTheme.accent.withValues(alpha: 0.45)),
+              )
+            : null,
+        padding: EdgeInsets.symmetric(vertical: 6, horizontal: highlighted ? 6 : 0),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

@@ -10,6 +10,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.drawable.Icon
+import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
@@ -26,6 +27,7 @@ class MainActivity : FlutterActivity() {
     private val PIP_CHANNEL = "com.ecohub.ecohub/pip"
     private val SETTINGS_CHANNEL = "com.ecohub.ecohub/settings"
     private val MULTICAST_CHANNEL = "com.ecohub.ecohub/multicast"
+    private val EXTERNAL_PLAYER_CHANNEL = "com.ecohub.ecohub/external_player"
     private val ACTION_PIP_CONTROL = "com.ecohub.ecohub.PIP_CONTROL"
     private val EXTRA_CONTROL_TYPE = "control_type"
 
@@ -221,6 +223,24 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, EXTERNAL_PLAYER_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "listPlayers" -> {
+                    try {
+                        result.success(queryExternalVideoPlayers())
+                    } catch (_: Exception) {
+                        result.success(emptyList<Map<String, String>>())
+                    }
+                }
+                "open" -> {
+                    val url = call.argument<String>("url") ?: ""
+                    val pkg = call.argument<String>("package") ?: ""
+                    result.success(openExternalVideo(url, pkg))
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, MULTICAST_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "acquireMulticastLock" -> {
@@ -251,6 +271,68 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    private fun queryExternalVideoPlayers(): List<Map<String, String>> {
+        val pm = packageManager
+        val seen = linkedSetOf<String>()
+        val out = mutableListOf<Map<String, String>>()
+        val probes = listOf(
+            Pair("http://example.com/video.mp4", "video/*"),
+            Pair("http://example.com/stream.m3u8", "application/vnd.apple.mpegurl"),
+            Pair("http://example.com/stream.m3u8", "video/*"),
+            Pair("https://example.com/video.mp4", "video/*"),
+        )
+        for ((sample, mime) in probes) {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(Uri.parse(sample), mime)
+            }
+            val matches = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            for (resolve in matches) {
+                val info = resolve.activityInfo ?: continue
+                val pkg = info.packageName ?: continue
+                if (pkg == applicationContext.packageName) continue
+                if (!seen.add(pkg)) continue
+                val label = resolve.loadLabel(pm)?.toString()?.trim().orEmpty()
+                out.add(mapOf("package" to pkg, "label" to (label.ifEmpty { pkg })))
+            }
+        }
+        out.sortBy { it["label"]?.lowercase(Locale.getDefault()) }
+        return out
+    }
+
+    private fun openExternalVideo(url: String, packageName: String): Boolean {
+        if (url.isBlank()) return false
+        val uri = Uri.parse(url)
+        val mime = guessVideoMime(url)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mime)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (packageName.isNotBlank()) {
+                setPackage(packageName)
+            }
+        }
+        return try {
+            if (packageName.isBlank()) {
+                val chooser = Intent.createChooser(intent, "选择播放器")
+                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(chooser)
+            } else {
+                startActivity(intent)
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun guessVideoMime(url: String): String {
+        val lower = url.lowercase(Locale.getDefault())
+        return when {
+            lower.contains(".m3u8") -> "application/vnd.apple.mpegurl"
+            lower.contains(".mpd") -> "application/dash+xml"
+            else -> "video/*"
         }
     }
 

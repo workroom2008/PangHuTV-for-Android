@@ -4,6 +4,8 @@ import '../common/app_theme.dart';
 import '../services/auth_session.dart';
 import '../services/app_catalog_service.dart';
 import '../utils/server_config_manager.dart';
+import '../utils/auth_requirement.dart';
+import '../models/film_models.dart';
 import '../utils/app_version_util.dart';
 import '../api/film_api.dart';
 import '../components/app_icon.dart';
@@ -103,7 +105,20 @@ class _SplashPageState extends State<SplashPage> {
       return;
     }
 
-    if (!AuthSession.instance.isLoggedIn) {
+    await _continueToApp();
+  }
+
+  Future<void> _continueToApp() async {
+    if (!mounted) return;
+    BasicConfig siteConfig;
+    try {
+      siteConfig = await FilmApi.getSiteConfig(force: false);
+    } catch (_) {
+      siteConfig = BasicConfig();
+    }
+    if (AuthRequirement.mustLogin(siteConfig: siteConfig) &&
+        !AuthSession.instance.isLoggedIn) {
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/login');
       return;
     }
@@ -180,7 +195,7 @@ class _SplashPageState extends State<SplashPage> {
                 setState(() {
                   _showUpdateDialog = false;
                 });
-                _goMain();
+                _continueToApp();
               },
             ),
         ],

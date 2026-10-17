@@ -14,6 +14,7 @@ import '../components/scroll_fab.dart';
 import '../components/filter_bar.dart';
 import '../components/sticky_appbar.dart';
 import '../components/dynamic_sliver_appbar.dart';
+import '../components/adaptive_content.dart';
 
 const int _pageSize = 21;
 
@@ -277,8 +278,9 @@ class _FilterPageState extends State<FilterPage> {
     final rowKeys = _rowKeys();
     return Scaffold(
       backgroundColor: AppTheme.bg,
-      body: SafeArea(
-        child: _loading
+      body: AdaptiveContent(
+        child: SafeArea(
+          child: _loading
             ? Column(
                 children: [
                   _navBar(showPills: false),
@@ -325,6 +327,7 @@ class _FilterPageState extends State<FilterPage> {
                   ScrollFab(visible: _showTopFab, onClickFab: _scrollToTop),
                 ],
               ),
+        ),
       ),
     );
   }

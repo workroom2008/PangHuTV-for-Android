@@ -22,23 +22,34 @@ class FavoritePage extends StatefulWidget {
 class _FavoritePageState extends State<FavoritePage> {
   List<FavoriteItem> _list = [];
   bool _loading = true;
+  final ScrollController _scrollController = ScrollController();
+  double? _pendingScrollOffset;
+  String? _anchorItemId;
 
   @override
   void initState() {
     super.initState();
-    SourceGuard.onReconnect(_reload);
+    SourceGuard.onReconnect(_reloadKeepScroll);
     FavoriteManager.onFavoriteChange(_reload);
     _reload();
   }
 
   @override
   void dispose() {
-    SourceGuard.offReconnect(_reload);
+    SourceGuard.offReconnect(_reloadKeepScroll);
     FavoriteManager.offFavoriteChange(_reload);
+    _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _reload() async {
+  void _reloadKeepScroll() {
+    _reload(preserveScroll: _list.isNotEmpty);
+  }
+
+  Future<void> _reload({bool preserveScroll = false}) async {
+    final savedOffset = preserveScroll && _scrollController.hasClients
+        ? _scrollController.offset
+        : _pendingScrollOffset;
     final list = await FavoriteManager.list();
     if (mounted) {
       setState(() {
@@ -46,6 +57,27 @@ class _FavoritePageState extends State<FavoritePage> {
         _loading = false;
       });
     }
+    if (!preserveScroll || savedOffset == null) return;
+    void apply() {
+      if (!mounted || !_scrollController.hasClients) return;
+      final max = _scrollController.position.maxScrollExtent;
+      _scrollController.jumpTo(savedOffset.clamp(0.0, max));
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      apply();
+      WidgetsBinding.instance.addPostFrameCallback((_) => apply());
+    });
+  }
+
+  Future<void> _openPlay(FavoriteItem item) async {
+    if (_scrollController.hasClients) {
+      _pendingScrollOffset = _scrollController.offset;
+    }
+    _anchorItemId = item.id;
+    await NavUtil.openPlay(context, item.id, title: item.name);
+    if (!mounted) return;
+    await _reload(preserveScroll: true);
   }
 
   void _toast(String message) {
@@ -107,7 +139,7 @@ class _FavoritePageState extends State<FavoritePage> {
     );
   }
 
-  Widget _itemCard(FavoriteItem item) {
+  Widget _itemCard(FavoriteItem item, {bool highlighted = false}) {
     return Dismissible(
       key: ValueKey('fav_${item.id}_${item.createdAt}'),
       direction: DismissDirection.endToStart,
@@ -133,12 +165,15 @@ class _FavoritePageState extends State<FavoritePage> {
         _toast('已取消收藏');
       },
       child: Material(
-        color: AppTheme.bgCard,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        color: highlighted ? AppTheme.accent.withValues(alpha: 0.08) : AppTheme.bgCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          side: highlighted
+              ? BorderSide(color: AppTheme.accent.withValues(alpha: 0.45))
+              : BorderSide.none,
+        ),
         child: InkWell(
-          onTap: () {
-            NavUtil.openPlay(context, item.id, title: item.name).then((_) => _reload());
-          },
+          onTap: () => _openPlay(item),
           borderRadius: BorderRadius.circular(AppTheme.radiusLg),
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -237,6 +272,7 @@ class _FavoritePageState extends State<FavoritePage> {
                               ],
                             )
                           : GridView.builder(
+                              controller: _scrollController,
                               physics: const AlwaysScrollableScrollPhysics(),
                               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -246,7 +282,13 @@ class _FavoritePageState extends State<FavoritePage> {
                                 mainAxisSpacing: 12,
                               ),
                               itemCount: _list.length,
-                              itemBuilder: (context, index) => _itemCard(_list[index]),
+                              itemBuilder: (context, index) {
+                                final item = _list[index];
+                                return _itemCard(
+                                  item,
+                                  highlighted: _anchorItemId != null && item.id == _anchorItemId,
+                                );
+                              },
                             ),
                     ),
             ),

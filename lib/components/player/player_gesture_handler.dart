@@ -16,7 +16,7 @@ class PlayerPanState {
   });
 }
 
-/// 播放器手势控制层（横向进度、全屏左亮度右音量、长按 3.0x）
+/// 播放器手势控制层（横向进度、全屏左亮度右音量、长按 2.0x）
 class PlayerGestureHandler extends StatefulWidget {
   final Widget child;
   final Duration currentPosition;
@@ -150,10 +150,6 @@ class _PlayerGestureHandlerState extends State<PlayerGestureHandler> {
     _isLongPressing = true;
     _preLongPressSpeed = widget.currentSpeed;
     widget.onSpeedChange(PlayerSpeed.fastRate);
-    widget.onPanStateChange(PlayerPanState(
-      kind: PlayerTipKind.speed,
-      text: '${PlayerSpeed.label(PlayerSpeed.fastRate)} 快速播放中',
-    ));
   }
 
   void _onLongPressEnd(LongPressEndDetails details) {

@@ -137,7 +137,7 @@ class FilmApi {
       'episode': episode,
       if (sid.isNotEmpty) 'sid': sid,
     };
-    final res = await HttpClient.instance.get('/filmPlayInfo', params: params, timeoutMs: 20000);
+    final res = await HttpClient.instance.get('/filmPlayInfo', params: params, timeoutMs: 45000);
     if (res.code != 0 || res.data == null) {
       throw Exception(res.msg.isNotEmpty ? res.msg : '播放数据获取失败');
     }

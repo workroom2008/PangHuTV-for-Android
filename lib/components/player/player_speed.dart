@@ -2,7 +2,7 @@
 class PlayerSpeed {
   static const List<double> rates = [0.75, 1.0, 1.25, 1.5, 2.0, 3.0];
   static const double defaultRate = 1.0;
-  static const double fastRate = 3.0;
+  static const double fastRate = 2.0;
 
   static const int minSeekMs = 3 * 60 * 1000;
   static const int maxSeekMs = 12 * 60 * 1000;

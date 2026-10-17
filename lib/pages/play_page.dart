@@ -9,6 +9,7 @@ import '../utils/app_orientation.dart';
 import '../utils/breakpoint.dart';
 import '../utils/play_resume.dart';
 import '../utils/server_config_manager.dart';
+import '../utils/playback_url.dart';
 import '../utils/source_guard.dart';
 import '../utils/format_util.dart';
 import '../utils/split_cutout_insets.dart';
@@ -162,7 +163,14 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
     }
 
     try {
-      final info = await FilmApi.getPlayInfo(_filmId, playFrom: sourceId, episode: _episodeIndex);
+      final playFromCollect = _resolveCollectSourceId(sourceId);
+      var info = await FilmApi.getPlayInfo(_filmId, playFrom: playFromCollect, episode: _episodeIndex);
+      if (PlaybackUrl.isDeferredCollectLink(info.current.link)) {
+        final retryFrom = playFromCollect.isNotEmpty ? playFromCollect : widget.sourceId.trim();
+        if (retryFrom.isNotEmpty) {
+          info = await FilmApi.getPlayInfo(_filmId, playFrom: retryFrom, episode: _episodeIndex);
+        }
+      }
       if (!mounted) return;
 
       final detail = info.detail;
@@ -238,6 +246,19 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
       if (s.id == id) return s;
     }
     return _sources.isNotEmpty ? _sources.first : null;
+  }
+
+  /// 播放 API 的 playFrom 须为采集源 ID（非播放组 id）。
+  String _resolveCollectSourceId(String routeOrGroupId) {
+    final hint = routeOrGroupId.trim();
+    if (hint.isEmpty) return widget.sourceId.trim();
+    for (final s in _sources) {
+      if (s.id == hint || s.sourceId == hint) {
+        final sid = s.sourceId.trim();
+        if (sid.isNotEmpty) return sid;
+      }
+    }
+    return hint;
   }
 
   String _downloadCollectSourceId() {

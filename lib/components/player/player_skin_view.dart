@@ -135,7 +135,9 @@ class PlayerSkinView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (panState.kind != PlayerTipKind.none && castDeviceName.isEmpty)
+          if (panState.kind != PlayerTipKind.none &&
+              panState.kind != PlayerTipKind.speed &&
+              castDeviceName.isEmpty)
             IgnorePointer(
               child: Container(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -156,8 +158,6 @@ class PlayerSkinView extends StatelessWidget {
                       const Icon(Icons.wb_sunny_rounded, color: Colors.white, size: 18)
                     else if (panState.kind == PlayerTipKind.volume)
                       Icon(muted ? Icons.volume_off_rounded : Icons.volume_up_rounded, color: Colors.white, size: 18)
-                    else if (panState.kind == PlayerTipKind.speed)
-                      const Icon(Icons.speed_rounded, color: AppTheme.accent, size: 18)
                     else if (panState.kind == PlayerTipKind.scale)
                       const Icon(Icons.aspect_ratio_rounded, color: Colors.white, size: 18),
                     const SizedBox(width: 8),

@@ -8,6 +8,8 @@ class AppSettingsManager {
   static const String keyAutoPlayNext = 'setting_auto_play_next';
   static const String keyPipAutoStart = 'setting_pip_auto_start';
   static const String keyPreferExternalPlayer = 'setting_prefer_external_player';
+  static const String keyExternalPlayerPackage = 'setting_external_player_package';
+  static const String keyExternalPlayerLabel = 'setting_external_player_label';
   static const MethodChannel _settingsChannel = MethodChannel('com.ecohub.ecohub/settings');
 
   static final AppSettingsManager instance = AppSettingsManager._();
@@ -16,16 +18,22 @@ class AppSettingsManager {
   final ValueNotifier<bool> autoPlayNextNotifier = ValueNotifier<bool>(true);
   final ValueNotifier<bool> pipAutoStartNotifier = ValueNotifier<bool>(true);
   final ValueNotifier<bool> preferExternalPlayerNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<String> externalPlayerPackageNotifier = ValueNotifier<String>('');
+  final ValueNotifier<String> externalPlayerLabelNotifier = ValueNotifier<String>('');
 
   bool get autoPlayNext => autoPlayNextNotifier.value;
   bool get pipAutoStart => pipAutoStartNotifier.value;
   bool get preferExternalPlayer => preferExternalPlayerNotifier.value;
+  String get externalPlayerPackage => externalPlayerPackageNotifier.value.trim();
+  String get externalPlayerLabel => externalPlayerLabelNotifier.value.trim();
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     autoPlayNextNotifier.value = prefs.getBool(keyAutoPlayNext) ?? true;
     pipAutoStartNotifier.value = prefs.getBool(keyPipAutoStart) ?? true;
     preferExternalPlayerNotifier.value = prefs.getBool(keyPreferExternalPlayer) ?? false;
+    externalPlayerPackageNotifier.value = prefs.getString(keyExternalPlayerPackage) ?? '';
+    externalPlayerLabelNotifier.value = prefs.getString(keyExternalPlayerLabel) ?? '';
   }
 
   Future<void> setAutoPlayNext(bool value) async {
@@ -44,6 +52,22 @@ class AppSettingsManager {
     preferExternalPlayerNotifier.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(keyPreferExternalPlayer, value);
+  }
+
+  Future<void> setExternalPlayer({required String packageName, required String label}) async {
+    final pkg = packageName.trim();
+    final name = label.trim();
+    externalPlayerPackageNotifier.value = pkg;
+    externalPlayerLabelNotifier.value = name;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(keyExternalPlayerPackage, pkg);
+    await prefs.setString(keyExternalPlayerLabel, name);
+  }
+
+  String externalPlayerSummary() {
+    if (externalPlayerLabel.isNotEmpty) return externalPlayerLabel;
+    if (externalPlayerPackage.isNotEmpty) return externalPlayerPackage;
+    return '系统选择器';
   }
 
   Future<String> getCacheSize() async {

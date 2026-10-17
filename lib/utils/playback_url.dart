@@ -26,13 +26,32 @@ class PlaybackUrl {
     return url;
   }
 
+  /// 需服务端 /filmPlayInfo 二次解链的占位链。
+  static bool isDeferredCollectLink(String link) {
+    final lower = link.trim().toLowerCase();
+    if (lower.isEmpty) return false;
+    return lower.startsWith('91porna:') ||
+        lower.startsWith('missav:') ||
+        lower.startsWith('chigua51:') ||
+        lower.startsWith('tianmei:') ||
+        lower.startsWith('lissav:') ||
+        lower.startsWith('sihu:') ||
+        lower.startsWith('ck69:') ||
+        lower.startsWith('av591:');
+  }
+
   static bool isPlayableLink(String url) {
     final raw = url.trim();
     if (raw.isEmpty) return false;
     final lower = raw.toLowerCase();
     if (lower.startsWith('91porna:') ||
         lower.startsWith('missav:') ||
-        lower.startsWith('chigua51:')) {
+        lower.startsWith('chigua51:') ||
+        lower.startsWith('tianmei:') ||
+        lower.startsWith('lissav:') ||
+        lower.startsWith('sihu:') ||
+        lower.startsWith('ck69:') ||
+        lower.startsWith('av591:')) {
       return false;
     }
     if (lower.startsWith('http://') || lower.startsWith('https://')) {
