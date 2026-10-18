@@ -135,9 +135,7 @@ class PlayerSkinView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (panState.kind != PlayerTipKind.none &&
-              panState.kind != PlayerTipKind.speed &&
-              castDeviceName.isEmpty)
+          if (panState.kind != PlayerTipKind.none && castDeviceName.isEmpty)
             IgnorePointer(
               child: Container(
                 margin: const EdgeInsets.only(bottom: 12),

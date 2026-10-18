@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../utils/format_util.dart';
 import 'player_speed.dart';
 
-enum PlayerTipKind { none, seekFwd, seekBack, brightness, volume, speed, scale }
+enum PlayerTipKind { none, seekFwd, seekBack, brightness, volume, scale }
 
 class PlayerPanState {
   final PlayerTipKind kind;
