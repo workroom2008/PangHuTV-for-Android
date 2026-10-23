@@ -103,15 +103,17 @@ class HttpClient {
     final manager = ServerConfigManager.instance;
     final url = manager.buildApiUrl(path);
     final userAgent = await _resolveUserAgent();
-    final headers = await _authHeaders(userAgent);
-    headers['Content-Type'] = 'application/json';
-    final res = await http
-        .post(
-          Uri.parse(url),
-          headers: headers,
-          body: jsonEncode(body ?? {}),
-        )
-        .timeout(Duration(milliseconds: timeoutMs));
+    final res = await _sendWithAuthRetry(() async {
+      final headers = await _authHeaders(userAgent);
+      headers['Content-Type'] = 'application/json';
+      return http
+          .post(
+            Uri.parse(url),
+            headers: headers,
+            body: jsonEncode(body ?? {}),
+          )
+          .timeout(Duration(milliseconds: timeoutMs));
+    }, retryOn401: !skipUnauthorizedRedirect);
     return _parseHttpResponse(res, redirectOn401: !skipUnauthorizedRedirect);
   }
 
@@ -194,6 +196,19 @@ class HttpClient {
 
   @visibleForTesting
   String formatConnectionError(dynamic error) => _formatConnectionError(error);
+
+  /// 401 时重试一次：同账号多端并存后，401 也可能来自旧令牌刚被续签或网关抖动。
+  Future<http.Response> _sendWithAuthRetry(
+    Future<http.Response> Function() send, {
+    bool retryOn401 = true,
+  }) async {
+    var res = await send();
+    if (res.statusCode != 401 || !retryOn401) return res;
+    _captureRefreshedToken(res);
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    res = await send();
+    return res;
+  }
 
   String _formatConnectionError(dynamic error) {
     final msg = error.toString().replaceFirst('Exception: ', '').trim();
@@ -380,16 +395,21 @@ class HttpClient {
 
   Future<ApiResponse> _send(String url, int timeoutMs, {String? customKey}) async {
     final userAgent = await _resolveUserAgent();
-    try {
+
+    Future<http.Response> doSend() async {
       var headers = await _authHeaders(userAgent);
       if (customKey != null && customKey.isNotEmpty &&
           !headers.containsKey('Authorization')) {
         headers = Map<String, String>.from(headers)
           ..['X-Provide-Key'] = customKey;
       }
-      final res = await http
+      return http
           .get(Uri.parse(url), headers: headers)
           .timeout(Duration(milliseconds: timeoutMs));
+    }
+
+    try {
+      final res = await _sendWithAuthRetry(doSend);
       return _parseHttpResponse(res);
     } catch (e) {
       if (e is Exception) rethrow;

@@ -77,9 +77,16 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
       return;
     }
 
+    final newOrigin = ServerConfigManager.stripApiSuffix(
+      ServerConfigManager.instance.normalizeRaw(url),
+    );
+    final sameServer = newOrigin == ServerConfigManager.instance.getOrigin();
+    if (!sameServer) {
+      // 切到不同服务端才清空登录态；同源重连保留会话，避免无谓地弹登录
+      await AuthSession.instance.clear();
+      AppCatalogService.instance.clear();
+    }
     await ServerConfigManager.instance.setServerUrl(url);
-    await AuthSession.instance.clear();
-    AppCatalogService.instance.clear();
     await _loadHistory();
     FilmApi.clearSiteConfig();
     SiteHeartbeat.instance.resetFailures();
@@ -88,7 +95,10 @@ class _ServerConfigPageState extends State<ServerConfigPage> {
 
     if (!mounted) return;
     _toast(_reconnect ? '已重新接入' : '源已接入');
-    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AuthSession.instance.isLoggedIn ? '/main' : '/login',
+      (route) => false,
+    );
     SourceGuard.notifyReconnected();
   }
 
