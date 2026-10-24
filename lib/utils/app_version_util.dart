@@ -27,7 +27,7 @@ class AppUpdateInfo {
 
 /// 版本工具与检查器
 class AppVersionUtil {
-  static const String appVersion = '1.0.2';
+  static const String appVersion = '1.0.3';
   static String get latestReleaseUrl => AppBranding.androidReleasesLatestUrl;
   static String _cachedVersionName = '';
   static AppUpdateInfo? _cachedUpdateInfo;

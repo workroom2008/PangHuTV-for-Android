@@ -228,7 +228,11 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
       _relateLoading = true;
     });
     try {
-      final list = await FilmApi.getRelate(_filmId);
+      // 服务端 RelateMovie 要求采集源，source 为空时相关推荐恒为空
+      final relateSource = _collectSourceId.trim().isNotEmpty
+          ? _collectSourceId.trim()
+          : _resolveCollectSourceId('');
+      final list = await FilmApi.getRelate(_filmId, source: relateSource);
       if (!mounted) return;
       setState(() {
         _related = list;

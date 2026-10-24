@@ -161,8 +161,12 @@ class FilmApi {
     return ApiParser.parsePlay(res.data);
   }
 
-  static Future<List<MovieBasicInfo>> getRelate(String id) async {
-    final res = await HttpClient.instance.get('/filmRelate', params: {'id': id});
+  static Future<List<MovieBasicInfo>> getRelate(String id, {String? source}) async {
+    final src = source?.trim() ?? '';
+    final res = await HttpClient.instance.get('/filmRelate', params: {
+      'id': id,
+      if (src.isNotEmpty) 'source': src,
+    });
     if (res.code != 0 || res.data == null) return [];
     if (res.data is List) {
       return ApiParser.parseMovies(res.data);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'collect_source_scope.dart';
 import 'play_navigation.dart';
 
 /// 路由封装，对齐 OHOS `NavUtil`
@@ -34,8 +35,13 @@ class NavUtil {
     String title = '',
   }) {
     if (PlayNavigation.isLocalFilmId(id)) {
+      // 未显式传源时兜底当前采集源 scope，避免全源冷启动按默认源解析错线路
+      var filmSourceId = sourceId.trim();
+      if (filmSourceId.isEmpty) {
+        filmSourceId = CollectSourceScope.instance.activeId.trim();
+      }
       final params = <String, dynamic>{'id': id};
-      if (sourceId.isNotEmpty) params['sourceId'] = sourceId;
+      if (filmSourceId.isNotEmpty) params['sourceId'] = filmSourceId;
       if (episodeIndex != null && episodeIndex >= 0) {
         params['episodeIndex'] = '$episodeIndex';
       }
