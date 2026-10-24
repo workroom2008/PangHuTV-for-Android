@@ -28,6 +28,7 @@ class LivePlayBody extends StatelessWidget {
   final List<MovieBasicInfo> related;
   final void Function(MovieBasicInfo film) onOpenRelated;
   final String sourceName;
+  final String sourceId;
   final Widget? downloadRow;
 
   const LivePlayBody({
@@ -53,6 +54,7 @@ class LivePlayBody extends StatelessWidget {
     required this.related,
     required this.onOpenRelated,
     required this.sourceName,
+    this.sourceId = '',
     this.downloadRow,
   });
 
@@ -80,6 +82,7 @@ class LivePlayBody extends StatelessWidget {
       columns: columns,
       onOpenRelated: onOpenRelated,
       sourceName: sourceName,
+      sourceId: sourceId,
     );
   }
 

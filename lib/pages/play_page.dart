@@ -64,6 +64,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
   bool _playerFull = false;
   final GlobalKey _videoKey = GlobalKey();
   String _sourceName = '默认源';
+  String _collectSourceId = '';
   double _lastCurrentTime = 0;
   double _lastDuration = 0;
   bool _persistEnabled = true;
@@ -202,6 +203,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
         _playUrl = info.current.link;
         _playTitle = '${detail.name} · ${info.current.episode}';
         _sourceName = _findSource(_playingSourceId)?.name ?? '默认源';
+        _collectSourceId = playFromCollect;
         _errorText = _playUrl.trim().isEmpty ? '暂无可用播放地址，请切换线路或稍后重试' : '';
         _loading = false;
         _persistEnabled = true;
@@ -365,8 +367,10 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
       _lastCurrentTime = resume.currentTime;
       _lastDuration = resume.duration;
       _activeTab = 0;
+      // 相关推荐卡片自带所属源：历史无记录时兜底，避免 playFrom 为空被服务端拒绝
+      _collectSourceId = film.sourceId.trim();
     });
-    _loadPlay(resume.sourceId);
+    _loadPlay(resume.sourceId.isNotEmpty ? resume.sourceId : film.sourceId.trim());
     _loadRelate();
   }
 
@@ -519,6 +523,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
       related: _related,
       onOpenRelated: _openRelated,
       sourceName: _sourceName,
+      sourceId: _collectSourceId,
       downloadRow: PlayDownloadRow(
         key: ValueKey('dl:$_filmId:$_episodeIndex:$_playingSourceId'),
         filmId: _filmId,

@@ -20,6 +20,7 @@ class PlayDetailPanel extends StatefulWidget {
   final String actor;
   final String plot;
   final String sourceName;
+  final String sourceId;
   final MovieDescriptor? descriptor;
   final List<PlaySource> sources;
   final String playingSourceId;
@@ -40,6 +41,7 @@ class PlayDetailPanel extends StatefulWidget {
     this.actor = '',
     this.plot = '',
     this.sourceName = '',
+    this.sourceId = '',
     this.descriptor,
     required this.sources,
     required this.playingSourceId,
@@ -566,6 +568,7 @@ class _PlayDetailPanelState extends State<PlayDetailPanel> {
               subTitle: widget.subTitle,
               actor: widget.actor,
               sourceName: widget.sourceName,
+              sourceId: widget.sourceId,
               plot: widget.plot,
               descriptor: widget.descriptor,
               rightInset: widget.rightInset,

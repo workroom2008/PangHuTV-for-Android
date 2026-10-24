@@ -479,6 +479,7 @@ class FavoriteItem {
   final String subTitle;
   final String actor;
   final String director;
+  final String sourceId;
   final int createdAt;
 
   FavoriteItem({
@@ -492,6 +493,7 @@ class FavoriteItem {
     this.subTitle = '',
     this.actor = '',
     this.director = '',
+    this.sourceId = '',
     required this.createdAt,
   });
 
@@ -506,6 +508,7 @@ class FavoriteItem {
     'subTitle': subTitle,
     'actor': actor,
     'director': director,
+    'sourceId': sourceId,
     'createdAt': createdAt,
   };
 
@@ -521,6 +524,7 @@ class FavoriteItem {
       subTitle: '${json['subTitle'] ?? ''}',
       actor: '${json['actor'] ?? ''}',
       director: '${json['director'] ?? ''}',
+      sourceId: '${json['sourceId'] ?? ''}',
       createdAt: (json['createdAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
     );
   }

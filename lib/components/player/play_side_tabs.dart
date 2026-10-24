@@ -17,6 +17,7 @@ class PlaySideTabs extends StatelessWidget {
   final String actor;
   final String plot;
   final String sourceName;
+  final String sourceId;
   final MovieDescriptor? descriptor;
   final List<PlaySource> sources;
   final String playingSourceId;
@@ -42,6 +43,7 @@ class PlaySideTabs extends StatelessWidget {
     this.actor = '',
     this.plot = '',
     this.sourceName = '',
+    this.sourceId = '',
     this.descriptor,
     required this.sources,
     required this.playingSourceId,
@@ -137,6 +139,7 @@ class PlaySideTabs extends StatelessWidget {
                   actor: actor,
                   plot: plot,
                   sourceName: '',
+                  sourceId: sourceId,
                   descriptor: descriptor,
                   sources: sources,
                   playingSourceId: playingSourceId,

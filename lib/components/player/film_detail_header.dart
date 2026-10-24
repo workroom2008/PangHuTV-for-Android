@@ -14,6 +14,7 @@ class FilmDetailHeader extends StatefulWidget {
   final String actor;
   final String plot;
   final String sourceName;
+  final String sourceId;
   final MovieDescriptor? descriptor;
   final double rightInset;
 
@@ -26,6 +27,7 @@ class FilmDetailHeader extends StatefulWidget {
     this.actor = '',
     this.plot = '',
     this.sourceName = '',
+    this.sourceId = '',
     this.descriptor,
     this.rightInset = 0,
   });
@@ -170,6 +172,7 @@ class _FilmDetailHeaderState extends State<FilmDetailHeader> {
       subTitle: widget.subTitle,
       actor: widget.actor,
       director: desc?.director ?? '',
+      sourceId: widget.sourceId,
       createdAt: DateTime.now().millisecondsSinceEpoch,
     ));
     if (!mounted) return;

@@ -75,7 +75,7 @@ class _FavoritePageState extends State<FavoritePage> {
       _pendingScrollOffset = _scrollController.offset;
     }
     _anchorItemId = item.id;
-    await NavUtil.openPlay(context, item.id, title: item.name);
+    await NavUtil.openPlay(context, item.id, title: item.name, sourceId: item.sourceId);
     if (!mounted) return;
     await _reload(preserveScroll: true);
   }
