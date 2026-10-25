@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { SettingsManager } from "@/services/storage";
-import { api, ServerConfig } from "@/services/api";
-import { storageConfig } from "@/services/storageConfig";
+import { api, SiteBasic } from "@/services/api";
+import { clearAuthToken, clearServerFlags } from "@/services/authToken";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Logger from "@/utils/Logger";
 
@@ -30,7 +30,7 @@ interface SettingsState {
     };
   };
   isModalVisible: boolean;
-  serverConfig: ServerConfig | null;
+  serverConfig: SiteBasic | null;
   isLoadingServerConfig: boolean;
   loadSettings: () => Promise<void>;
   fetchServerConfig: () => Promise<void>;
@@ -75,11 +75,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const p = (async () => {
       set({ isLoadingServerConfig: true });
       try {
-        const config = await api.getServerConfig();
-        if (config) {
-          storageConfig.setStorageType(config.StorageType);
-          set({ serverConfig: config });
-        }
+        // 胖虎站点基础配置（免登录），内部同步私有化开关
+        const siteBasic = await api.getSiteBasic();
+        set({ serverConfig: siteBasic });
       } catch (error) {
         set({ serverConfig: null });
         logger.error("Failed to fetch server config:", error);
@@ -124,7 +122,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       videoSource,
     });
     if ( currentApiBaseUrl !== processedApiBaseUrl) {
-      await AsyncStorage.setItem('authCookies', '');
+      // 换服务器：清空登录态与私有化标记
+      await clearAuthToken();
+      await clearServerFlags();
     }
     api.setBaseUrl(processedApiBaseUrl);
     // Also update the URL in the state so the input field shows the processed URL

@@ -13,7 +13,7 @@ import { StyledButton } from "./StyledButton";
 
 const LoginModal = () => {
   const { isLoginModalVisible, hideLoginModal, checkLoginStatus } = useAuthStore();
-  const { serverConfig, apiBaseUrl } = useSettingsStore();
+  const { apiBaseUrl } = useSettingsStore();
   const { refreshPlayRecords } = useHomeStore();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -55,20 +55,14 @@ const LoginModal = () => {
   // Focus management with better TV remote handling
   useEffect(() => {
     if (isModalReady && isLoginModalVisible && !isSettingsPage) {
-      const isUsernameVisible = serverConfig?.StorageType !== "localstorage";
-
       // Use a small delay to ensure the modal is fully rendered
       const focusTimeout = setTimeout(() => {
-        if (isUsernameVisible) {
-          usernameInputRef.current?.focus();
-        } else {
-          passwordInputRef.current?.focus();
-        }
+        usernameInputRef.current?.focus();
       }, 300);
 
       return () => clearTimeout(focusTimeout);
     }
-  }, [isModalReady, isLoginModalVisible, serverConfig, isSettingsPage]);
+  }, [isModalReady, isLoginModalVisible, isSettingsPage]);
 
   // 清理 effect - 确保 Modal 关闭时清理所有状态
   useEffect(() => {
@@ -79,14 +73,13 @@ const LoginModal = () => {
   }, []);
 
   const handleLogin = async () => {
-    const isLocalStorage = serverConfig?.StorageType === "localstorage";
-    if (!password || (!isLocalStorage && !username)) {
+    if (!username || !password) {
       Toast.show({ type: "error", text1: "请输入用户名和密码" });
       return;
     }
     setIsLoading(true);
     try {
-      await api.login(isLocalStorage ? undefined : username, password);
+      await api.login(username, password);
       await checkLoginStatus(apiBaseUrl);
       await refreshPlayRecords();
 
@@ -148,19 +141,17 @@ const LoginModal = () => {
         <ThemedView style={styles.container}>
           <ThemedText style={styles.title}>需要登录</ThemedText>
           <ThemedText style={styles.subtitle}>服务器需要验证您的身份</ThemedText>
-          {serverConfig?.StorageType !== "localstorage" && (
-            <TextInput
-              ref={usernameInputRef}
-              style={styles.input}
-              placeholder="请输入用户名"
-              placeholderTextColor="#888"
-              value={username}
-              onChangeText={setUsername}
-              returnKeyType="next"
-              onSubmitEditing={handleUsernameSubmit}
-              blurOnSubmit={false}
-            />
-          )}
+          <TextInput
+            ref={usernameInputRef}
+            style={styles.input}
+            placeholder="请输入用户名"
+            placeholderTextColor="#888"
+            value={username}
+            onChangeText={setUsername}
+            returnKeyType="next"
+            onSubmitEditing={handleUsernameSubmit}
+            blurOnSubmit={false}
+          />
           <TextInput
             ref={passwordInputRef}
             style={styles.input}
@@ -177,7 +168,7 @@ const LoginModal = () => {
             onPress={handleLogin}
             disabled={isLoading}
             style={styles.button}
-            hasTVPreferredFocus={!serverConfig || serverConfig.StorageType === "localstorage"}
+            hasTVPreferredFocus={false}
           >
             {isLoading && <ActivityIndicator color="#fff" />}
           </StyledButton>

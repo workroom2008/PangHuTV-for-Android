@@ -1,5 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getAuthToken, setAuthToken } from "./authToken";
+import {
+  getAuthToken,
+  setAuthToken,
+  clearAuthToken,
+  setServerFlags,
+  clearServerFlags,
+} from "./authToken";
 
 // region: --- 胖虎请求基座 ---
 // 会话恢复回调（由 authStore 注册），401 时自动重登并重试一次
@@ -144,9 +150,17 @@ export interface ApiSite {
   detail?: string;
 }
 
-export interface ServerConfig {
-  SiteName: string;
-  StorageType: "localstorage" | "redis" | string;
+export interface SiteBasic {
+  siteName: string;
+  privateAccess: boolean;
+  requireWebLogin: boolean;
+}
+
+export interface SessionStatus {
+  authenticated: boolean;
+  licenseEnforced: boolean;
+  licensed: boolean;
+  requireWebLogin: boolean;
 }
 
 export class API {
@@ -203,94 +217,49 @@ export class API {
     return response;
   }
 
-  async login(username?: string | undefined, password?: string): Promise<{ ok: boolean }> {
-    const response = await this._fetch("/api/login", {
+  async login(username: string, password: string): Promise<{ ok: boolean }> {
+    const data = await panghuFetch(this.baseURL, "/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
-
-    // 存储cookie到AsyncStorage
-    const cookies = response.headers.get("Set-Cookie");
-    if (cookies) {
-      await AsyncStorage.setItem("authCookies", cookies);
+    if (!data?.token) {
+      throw new Error("登录响应缺少 token");
     }
-
-    return response.json();
+    await setAuthToken(data.token);
+    return { ok: true };
   }
 
   async logout(): Promise<{ ok: boolean }> {
-    const response = await this._fetch("/api/logout", {
-      method: "POST",
+    try {
+      await panghuFetch(this.baseURL, "/api/logout", { method: "POST" });
+    } finally {
+      await clearAuthToken();
+      await clearServerFlags();
+      setPrivateAccess(false);
+    }
+    return { ok: true };
+  }
+
+  /** 站点基础配置（免登录），并同步私有化开关 */
+  async getSiteBasic(): Promise<SiteBasic> {
+    const data = await panghuFetch(this.baseURL, "/api/config/basic");
+    const siteBasic: SiteBasic = {
+      siteName: data?.siteName ?? "",
+      privateAccess: !!data?.privateAccess,
+      requireWebLogin: !!data?.requireWebLogin,
+    };
+    setPrivateAccess(siteBasic.privateAccess);
+    await setServerFlags({
+      privateAccess: siteBasic.privateAccess,
+      requireWebLogin: siteBasic.requireWebLogin,
     });
-    await AsyncStorage.setItem("authCookies", '');
-    return response.json();
+    return siteBasic;
   }
 
-  async getServerConfig(): Promise<ServerConfig> {
-    const response = await this._fetch("/api/server-config");
-    return response.json();
-  }
-
-  async getFavorites(key?: string): Promise<Record<string, Favorite> | Favorite | null> {
-    const url = key ? `/api/favorites?key=${encodeURIComponent(key)}` : "/api/favorites";
-    const response = await this._fetch(url);
-    return response.json();
-  }
-
-  async addFavorite(key: string, favorite: Omit<Favorite, "save_time">): Promise<{ success: boolean }> {
-    const response = await this._fetch("/api/favorites", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, favorite }),
-    });
-    return response.json();
-  }
-
-  async deleteFavorite(key?: string): Promise<{ success: boolean }> {
-    const url = key ? `/api/favorites?key=${encodeURIComponent(key)}` : "/api/favorites";
-    const response = await this._fetch(url, { method: "DELETE" });
-    return response.json();
-  }
-
-  async getPlayRecords(): Promise<Record<string, PlayRecord>> {
-    const response = await this._fetch("/api/playrecords");
-    return response.json();
-  }
-
-  async savePlayRecord(key: string, record: Omit<PlayRecord, "save_time">): Promise<{ success: boolean }> {
-    const response = await this._fetch("/api/playrecords", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, record }),
-    });
-    return response.json();
-  }
-
-  async deletePlayRecord(key?: string): Promise<{ success: boolean }> {
-    const url = key ? `/api/playrecords?key=${encodeURIComponent(key)}` : "/api/playrecords";
-    const response = await this._fetch(url, { method: "DELETE" });
-    return response.json();
-  }
-
-  async getSearchHistory(): Promise<string[]> {
-    const response = await this._fetch("/api/searchhistory");
-    return response.json();
-  }
-
-  async addSearchHistory(keyword: string): Promise<string[]> {
-    const response = await this._fetch("/api/searchhistory", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ keyword }),
-    });
-    return response.json();
-  }
-
-  async deleteSearchHistory(keyword?: string): Promise<{ success: boolean }> {
-    const url = keyword ? `/api/searchhistory?keyword=${keyword}` : "/api/searchhistory";
-    const response = await this._fetch(url, { method: "DELETE" });
-    return response.json();
+  /** 登录/授权门禁探测（免登录，带 token 则校验） */
+  async getSessionStatus(): Promise<SessionStatus> {
+    return panghuFetch(this.baseURL, "/api/session/status");
   }
 
   getImageProxyUrl(imageUrl: string): string {

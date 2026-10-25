@@ -40,7 +40,7 @@ export const useApiConfig = () => {
       setValidationState(prev => ({ ...prev, isValidating: true, error: null }));
 
       try {
-        await api.getServerConfig();
+        await api.getSiteBasic();
         setValidationState({
           isValidating: false,
           isValid: true,
