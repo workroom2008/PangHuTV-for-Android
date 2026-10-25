@@ -249,7 +249,9 @@ export class API {
       privateAccess: !!data?.privateAccess,
       requireWebLogin: !!data?.requireWebLogin,
     };
-    setPrivateAccess(siteBasic.privateAccess);
+    // privateAccess 或 requireWebLogin 任一开启，/api/hls、/api/cover 都要求登录态
+    //（播放器/Image 组件不带 Authorization，必须走 ?token=）
+    setPrivateAccess(siteBasic.privateAccess || siteBasic.requireWebLogin);
     await setServerFlags({
       privateAccess: siteBasic.privateAccess,
       requireWebLogin: siteBasic.requireWebLogin,
@@ -262,16 +264,24 @@ export class API {
     return panghuFetch(this.baseURL, "/api/session/status");
   }
 
-  /** 海报/图片地址：相对路径拼 origin；cover/静态海报在私有化时追加 token */
+  /** 海报/图片地址：相对路径拼 origin；cover/静态海报在私有化时追加 token（绝对地址同样处理） */
   processImageUrl(imageUrl: string): string {
-    if (!imageUrl || /^https?:\/\//i.test(imageUrl) || !imageUrl.startsWith("/")) {
+    if (!imageUrl) return imageUrl;
+    const isAbsolute = /^https?:\/\//i.test(imageUrl);
+    const isCover =
+      imageUrl.includes("/api/cover") || imageUrl.includes("/api/upload/pic/poster");
+    if (isAbsolute) {
+      if (isPrivateAccess() && isCover) {
+        const token = getCachedAuthToken();
+        if (token) {
+          return `${imageUrl}${imageUrl.includes("?") ? "&" : "?"}token=${token}`;
+        }
+      }
       return imageUrl;
     }
+    if (!imageUrl.startsWith("/")) return imageUrl;
     let url = `${this.baseURL}${imageUrl}`;
-    if (
-      isPrivateAccess() &&
-      (imageUrl.startsWith("/api/cover") || imageUrl.startsWith("/api/upload/pic/poster"))
-    ) {
+    if (isPrivateAccess() && isCover) {
       const token = getCachedAuthToken();
       if (token) {
         url += `${imageUrl.includes("?") ? "&" : "?"}token=${token}`;
@@ -290,9 +300,10 @@ export class API {
     }
   }
 
-  /** 胖虎导航大类（pid=0 顶级，show 过滤） */
-  async getNavCategories(): Promise<{ pid: number; name: string }[]> {
-    const data = await panghuFetch(this.baseURL, "/api/navCategory");
+  /** 胖虎导航大类（pid=0 顶级，show 过滤）；source 限定采集源 */
+  async getNavCategories(source?: string): Promise<{ pid: number; name: string }[]> {
+    const url = source ? `/api/navCategory?source=${encodeURIComponent(source)}` : "/api/navCategory";
+    const data = await panghuFetch(this.baseURL, url);
     return ((data || []) as any[])
       .filter((c) => c.pid === 0 && c.show !== false)
       .map((c) => ({ pid: Number(c.id), name: String(c.name ?? "") }));
@@ -305,16 +316,33 @@ export class API {
   }
 
   /** 每日更新 */
-  async getDailyUpdates(pid: number, current: number, pageSize: number): Promise<SearchResult[]> {
-    const url = `/api/dailyUpdates?pid=${pid}&current=${current}&pageSize=${pageSize}`;
-    const data = await panghuFetch(this.baseURL, url);
+  async getDailyUpdates(
+    pid: number,
+    current: number,
+    pageSize: number,
+    source?: string
+  ): Promise<SearchResult[]> {
+    const params = new URLSearchParams({
+      pid: String(pid),
+      current: String(current),
+      pageSize: String(pageSize),
+    });
+    if (source) params.set("source", source);
+    const data = await panghuFetch(this.baseURL, `/api/dailyUpdates?${params.toString()}`);
     return this.mapMovieRows(data?.list || []);
   }
 
   /** 分类筛选页 */
   async getClassifyPage(
     pid: number,
-    opts: { category?: string; area?: string; year?: string; current?: number; pageSize?: number }
+    opts: {
+      category?: string;
+      area?: string;
+      year?: string;
+      current?: number;
+      pageSize?: number;
+      source?: string;
+    }
   ): Promise<SearchResult[]> {
     const params = new URLSearchParams({
       Pid: String(pid),
@@ -324,6 +352,7 @@ export class API {
     if (opts.category) params.set("Category", opts.category);
     if (opts.area) params.set("Area", opts.area);
     if (opts.year) params.set("Year", opts.year);
+    if (opts.source) params.set("source", opts.source);
     const data = await panghuFetch(this.baseURL, `/api/filmClassifySearch?${params.toString()}`);
     return this.mapMovieRows(data?.list || []);
   }

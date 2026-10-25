@@ -3,6 +3,7 @@ import { api, SearchResult, PlayRecord } from "@/services/api";
 import { PlayRecordManager } from "@/services/storage";
 import useAuthStore from "./authStore";
 import { useSettingsStore } from "./settingsStore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type RowItem = (SearchResult | PlayRecord) & {
   id: string;
@@ -38,6 +39,9 @@ const PAGE_SIZE = 20;
 interface HomeState {
   categories: Category[];
   selectedCategory: Category;
+  /** 采集源列表与当前选中源（"" = 全部源） */
+  sources: { id: string; name: string }[];
+  selectedSource: string;
   contentData: RowItem[];
   loading: boolean;
   loadingMore: boolean;
@@ -45,16 +49,24 @@ interface HomeState {
   hasMore: boolean;
   error: string | null;
   navLoaded: boolean;
+  /** 冷启动恢复已选源完成（门控首次数据加载，避免先用全源查一遍再重来） */
+  sourceReady: boolean;
   fetchInitialData: () => Promise<void>;
   loadMoreData: () => Promise<void>;
   selectCategory: (category: Category) => void;
+  selectSource: (sourceId: string) => Promise<void>;
+  initSelectedSource: () => Promise<void>;
   refreshPlayRecords: () => Promise<void>;
   clearError: () => void;
 }
 
+const SELECTED_SOURCE_KEY = "mytv_selected_source";
+
 const useHomeStore = create<HomeState>((set, get) => ({
   categories: initialCategories,
   selectedCategory: initialCategories[0],
+  sources: [],
+  selectedSource: "",
   contentData: [],
   loading: true,
   loadingMore: false,
@@ -62,15 +74,59 @@ const useHomeStore = create<HomeState>((set, get) => ({
   hasMore: true,
   error: null,
   navLoaded: false,
+  sourceReady: false,
+
+  initSelectedSource: async () => {
+    if (get().sourceReady) return;
+    const saved = await AsyncStorage.getItem(SELECTED_SOURCE_KEY);
+    if (saved) {
+      // 有已选源：按换源流程重建（navCategory 按源拉取）
+      set({ selectedSource: saved });
+      await get().selectSource(saved);
+      set({ sourceReady: true });
+    } else {
+      set({ sourceReady: true });
+    }
+  },
+
+  selectSource: async (sourceId: string) => {
+    if (get().selectedSource === sourceId) return;
+    await AsyncStorage.setItem(SELECTED_SOURCE_KEY, sourceId);
+    // 换源：分类体系整体重建，选中回落到"每日更新"
+    set({
+      selectedSource: sourceId,
+      navLoaded: false,
+      categories: initialCategories,
+      selectedCategory: initialCategories[1],
+      contentData: [],
+      pageStart: 0,
+      hasMore: true,
+      error: null,
+    });
+    await get().fetchInitialData();
+    set({ sourceReady: true });
+  },
 
   fetchInitialData: async () => {
     const { apiBaseUrl } = useSettingsStore.getState();
     await useAuthStore.getState().checkLoginStatus(apiBaseUrl);
 
-    // 首次加载时注入胖虎导航大类（电视剧/电影/...）
+    const { selectedSource } = get();
+
+    // 源列表（一次拉取缓存到 store）
+    if (get().sources.length === 0) {
+      try {
+        const sites = await api.getApiSources();
+        set({ sources: sites.map((s) => ({ id: s.key, name: s.name })) });
+      } catch {
+        // 源列表失败不阻塞首页
+      }
+    }
+
+    // 首次加载（或换源后）注入胖虎导航大类
     if (!get().navLoaded) {
       try {
-        const navs = await api.getNavCategories();
+        const navs = await api.getNavCategories(selectedSource || undefined);
         const pidCats: Category[] = navs.map((n) => ({ title: n.name, kind: "pid", pid: n.pid }));
         set({ categories: [...initialCategories, ...pidCats], navLoaded: true });
       } catch (e) {
@@ -84,7 +140,7 @@ const useHomeStore = create<HomeState>((set, get) => ({
   },
 
   loadMoreData: async () => {
-    const { selectedCategory, pageStart, loadingMore, hasMore } = get();
+    const { selectedCategory, selectedSource, pageStart, loadingMore, hasMore } = get();
     if (loadingMore || !hasMore) return;
 
     if (pageStart > 0) {
@@ -121,7 +177,7 @@ const useHomeStore = create<HomeState>((set, get) => ({
       } else if (selectedCategory.kind === "daily") {
         // pageStart 按固定页幅推进（非 rows.length）：尾页非满页时游标不漂移
         const current = Math.floor(pageStart / PAGE_SIZE) + 1;
-        const rows = await api.getDailyUpdates(0, current, PAGE_SIZE);
+        const rows = await api.getDailyUpdates(0, current, PAGE_SIZE, selectedSource || undefined);
         set((state) => ({
           contentData: current === 1 ? rows : [...state.contentData, ...rows],
           pageStart: pageStart + PAGE_SIZE,
@@ -129,7 +185,10 @@ const useHomeStore = create<HomeState>((set, get) => ({
         }));
       } else if (selectedCategory.kind === "pid" && selectedCategory.pid != null) {
         const current = Math.floor(pageStart / PAGE_SIZE) + 1;
-        const rows = await api.getClassifyPage(selectedCategory.pid, { current });
+        const rows = await api.getClassifyPage(selectedCategory.pid, {
+          current,
+          source: selectedSource || undefined,
+        });
         set((state) => ({
           contentData: current === 1 ? rows : [...state.contentData, ...rows],
           pageStart: pageStart + PAGE_SIZE,

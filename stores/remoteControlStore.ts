@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { remoteControlService } from '@/services/remoteControlService';
+import { remoteControlService, RemoteConfigPayload } from '@/services/remoteControlService';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { LoginCredentialsManager } from '@/services/storage';
 import Logger from '@/utils/Logger';
 
 const logger = Logger.withTag('RemoteControlStore');
@@ -41,6 +43,34 @@ export const useRemoteControlStore = create<RemoteControlState>((set, get) => ({
       onHandshake: () => {
         logger.debug('Handshake successful');
         set({ isModalVisible: false })
+      },
+      getConfig: async () => {
+        const s = useSettingsStore.getState();
+        const creds = await LoginCredentialsManager.get();
+        return {
+          apiBaseUrl: s.apiBaseUrl,
+          m3uUrl: s.m3uUrl,
+          username: creds?.username ?? '',
+          password: creds?.password ?? '',
+        };
+      },
+      applyConfig: async (config: RemoteConfigPayload) => {
+        try {
+          const s = useSettingsStore.getState();
+          if (config.apiBaseUrl) s.setApiBaseUrl(config.apiBaseUrl);
+          if (config.m3uUrl !== undefined) s.setM3uUrl(config.m3uUrl);
+          await s.saveSettings();
+
+          let loginMsg = '';
+          if (config.username) {
+            const ok = await s.saveAccountAndLogin(config.username, config.password ?? '');
+            loginMsg = ok ? '，已登录' : '，登录失败请检查账号';
+          }
+          return { status: 'ok' as const, message: `设置已保存${loginMsg}` };
+        } catch (error) {
+          logger.error('applyConfig failed:', error);
+          return { status: 'error' as const, message: '保存失败，请重试' };
+        }
       },
     });
     try {

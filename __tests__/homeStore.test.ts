@@ -7,6 +7,7 @@ jest.mock("../services/api", () => ({
     getNavCategories: jest.fn(),
     getDailyUpdates: jest.fn(),
     getClassifyPage: jest.fn(),
+    getApiSources: jest.fn(),
   },
   SearchResult: {},
 }));
@@ -52,6 +53,8 @@ describe("homeStore（胖虎分类）", () => {
       hasMore: true,
       error: null,
       navLoaded: true,
+      selectedSource: "",
+      sources: [],
     });
   });
 
@@ -63,7 +66,7 @@ describe("homeStore（胖虎分类）", () => {
     useHomeStore.getState().selectCategory({ title: "每日更新", kind: "daily" } as any);
     await useHomeStore.getState().fetchInitialData();
 
-    expect(mockedApi.getDailyUpdates).toHaveBeenCalledWith(0, 1, 20);
+    expect(mockedApi.getDailyUpdates).toHaveBeenCalledWith(0, 1, 20, undefined);
     const state = useHomeStore.getState();
     expect(state.contentData).toHaveLength(1);
     expect(state.contentData[0].source).toBe("src1");
@@ -100,6 +103,41 @@ describe("homeStore（胖虎分类）", () => {
     expect(mockedApi.getClassifyPage).not.toHaveBeenCalled();
   });
 
+  it("选中源后：navCategory/dailyUpdates/classifyPage 均带 source", async () => {
+    (mockedApi.getNavCategories as jest.Mock).mockResolvedValue([{ pid: 1, name: "电视剧" }]);
+    (mockedApi.getDailyUpdates as jest.Mock).mockResolvedValue([]);
+    (mockedApi.getClassifyPage as jest.Mock).mockResolvedValue([]);
+
+    useHomeStore.setState({
+      selectedSource: "md2020",
+      navLoaded: false,
+      selectedCategory: { title: "每日更新", kind: "daily" } as any,
+    });
+    await useHomeStore.getState().fetchInitialData();
+
+    expect(mockedApi.getNavCategories).toHaveBeenCalledWith("md2020");
+    expect(mockedApi.getDailyUpdates).toHaveBeenCalledWith(0, 1, 20, "md2020");
+
+    useHomeStore.setState({ selectedCategory: { title: "电视剧", kind: "pid", pid: 1 } as any, pageStart: 0, hasMore: true });
+    await useHomeStore.getState().loadMoreData();
+    expect(mockedApi.getClassifyPage).toHaveBeenCalledWith(1, { current: 1, source: "md2020" });
+  });
+
+  it("selectSource 重置分类并重新加载", async () => {
+    (mockedApi.getNavCategories as jest.Mock).mockResolvedValue([{ pid: 6, name: "电影" }]);
+    (mockedApi.getDailyUpdates as jest.Mock).mockResolvedValue([]);
+
+    useHomeStore.setState({ navLoaded: true, selectedSource: "" });
+    await useHomeStore.getState().selectSource("md2020");
+
+    expect(useHomeStore.getState().selectedSource).toBe("md2020");
+    // 重载完成后 nav 已按新源重建
+    expect(useHomeStore.getState().navLoaded).toBe(true);
+    expect(mockedApi.getNavCategories).toHaveBeenCalledWith("md2020");
+    // 重新加载后选中分类回落到每日更新
+    expect(useHomeStore.getState().selectedCategory.kind).toBe("daily");
+  });
+
   it("非满页后 hasMore=false 且不重复拉同一页", async () => {
     const fullPage = Array.from({ length: 20 }, (_, i) => ({
       id: `m${i}`,
@@ -119,8 +157,8 @@ describe("homeStore（胖虎分类）", () => {
     await useHomeStore.getState().loadMoreData();
 
     expect(mockedApi.getDailyUpdates).toHaveBeenCalledTimes(2);
-    expect(mockedApi.getDailyUpdates).toHaveBeenNthCalledWith(1, 0, 1, 20);
-    expect(mockedApi.getDailyUpdates).toHaveBeenNthCalledWith(2, 0, 2, 20);
+    expect(mockedApi.getDailyUpdates).toHaveBeenNthCalledWith(1, 0, 1, 20, undefined);
+    expect(mockedApi.getDailyUpdates).toHaveBeenNthCalledWith(2, 0, 2, 20, undefined);
     const state = useHomeStore.getState();
     expect(state.contentData).toHaveLength(27);
     expect(state.hasMore).toBe(false);

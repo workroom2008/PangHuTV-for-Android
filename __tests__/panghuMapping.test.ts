@@ -2,7 +2,7 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
 
-import { api, panghuFetch, setPrivateAccess } from "../services/api";
+import { api, panghuFetch, setPrivateAccess, isPrivateAccess } from "../services/api";
 import { toPlaybackUrl } from "../services/playbackUrl";
 import { setAuthToken, clearAuthToken } from "../services/authToken";
 
@@ -29,6 +29,21 @@ describe("胖虎接口映射", () => {
     global.fetch = jest.fn();
   });
 
+  describe("getSiteBasic", () => {
+    it("requireWebLogin:true 也视为需 token（播放/海报走 ?token=）", async () => {
+      (global.fetch as jest.Mock).mockResolvedValue(
+        jsonResponse({
+          code: 0,
+          data: { siteName: "胖虎影视", privateAccess: false, requireWebLogin: true },
+          msg: "ok",
+        })
+      );
+      await api.getSiteBasic();
+      expect(isPrivateAccess()).toBe(true);
+      setPrivateAccess(false);
+    });
+  });
+
   describe("processImageUrl", () => {
     it("绝对地址原样返回", () => {
       expect(api.processImageUrl("http://x/p.jpg")).toBe("http://x/p.jpg");
@@ -44,6 +59,14 @@ describe("胖虎接口映射", () => {
       await setAuthToken("jwt-t");
       setPrivateAccess(true);
       expect(api.processImageUrl("/api/cover?url=p.jpg&source=src1")).toBe(
+        "http://s/api/cover?url=p.jpg&source=src1&token=jwt-t"
+      );
+    });
+
+    it("私有化时绝对地址 cover 也追加 token", async () => {
+      await setAuthToken("jwt-t");
+      setPrivateAccess(true);
+      expect(api.processImageUrl("http://s/api/cover?url=p.jpg&source=src1")).toBe(
         "http://s/api/cover?url=p.jpg&source=src1&token=jwt-t"
       );
     });
@@ -68,6 +91,14 @@ describe("胖虎接口映射", () => {
       await setAuthToken("jwt-t");
       setPrivateAccess(true);
       expect(toPlaybackUrl("/api/hls?url=a.m3u8&source=src1", "http://s")).toBe(
+        "http://s/api/hls.m3u8?url=a.m3u8&source=src1&token=jwt-t"
+      );
+    });
+
+    it("私有化时绝对地址 hls 也改写并追加 token", async () => {
+      await setAuthToken("jwt-t");
+      setPrivateAccess(true);
+      expect(toPlaybackUrl("http://s/api/hls?url=a.m3u8&source=src1", "http://s")).toBe(
         "http://s/api/hls.m3u8?url=a.m3u8&source=src1&token=jwt-t"
       );
     });
@@ -229,6 +260,35 @@ describe("胖虎接口映射", () => {
       );
       const sites = await api.getApiSources();
       expect(sites).toEqual([{ key: "src1", api: "", name: "源A" }]);
+    });
+  });
+
+  describe("按源查询", () => {
+    it("getNavCategories 带 source 参数", async () => {
+      (global.fetch as jest.Mock).mockResolvedValue(jsonResponse({ code: 0, data: [], msg: "ok" }));
+      await api.getNavCategories("md2020");
+      const url = (global.fetch as jest.Mock).mock.calls[0][0];
+      expect(url).toContain("/api/navCategory?source=md2020");
+    });
+
+    it("getDailyUpdates 带 source 参数", async () => {
+      (global.fetch as jest.Mock).mockResolvedValue(
+        jsonResponse({ code: 0, data: { list: [] }, msg: "ok" })
+      );
+      await api.getDailyUpdates(0, 1, 20, "md2020");
+      const url = (global.fetch as jest.Mock).mock.calls[0][0];
+      expect(url).toContain("/api/dailyUpdates?");
+      expect(url).toContain("source=md2020");
+    });
+
+    it("getClassifyPage 带 source 参数", async () => {
+      (global.fetch as jest.Mock).mockResolvedValue(
+        jsonResponse({ code: 0, data: { list: [] }, msg: "ok" })
+      );
+      await api.getClassifyPage(6, { current: 1, source: "md2020" });
+      const url = (global.fetch as jest.Mock).mock.calls[0][0];
+      expect(url).toContain("/api/filmClassifySearch?");
+      expect(url).toContain("source=md2020");
     });
   });
 

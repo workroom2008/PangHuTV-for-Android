@@ -3,43 +3,109 @@ import Logger from '@/utils/Logger';
 
 const logger = Logger.withTag('RemoteControl');
 
-const getRemotePageHTML = () => {
+export interface RemoteConfigPayload {
+  apiBaseUrl?: string;
+  username?: string;
+  password?: string;
+  m3uUrl?: string;
+}
+
+const escapeHtml = (s: string) =>
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+const getRemotePageHTML = (current: RemoteConfigPayload) => {
+  const currentJson = JSON.stringify(current).replace(/</g, "\\u003c");
   return `
   <!DOCTYPE html>
   <html>
   <head>
-    <title>OrionTV Remote</title>
+    <title>胖虎TV 远程配置</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #121212; color: white; }
-      h3 { color: #eee; }
-      #container { display: flex; flex-direction: column; align-items: center; width: 90%; max-width: 400px; }
-      #text { width: 100%; padding: 15px; font-size: 16px; border-radius: 8px; border: 1px solid #333; background-color: #2a2a2a; color: white; margin-bottom: 20px; box-sizing: border-box; }
-      button { width: 100%; padding: 15px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; background-color: #007AFF; color: white; cursor: pointer; }
-      button:active { background-color: #0056b3; }
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background-color: #121212; color: white; padding: 16px; box-sizing: border-box; }
+      h3 { color: #eee; margin: 0 0 4px; }
+      .tip { color: #999; font-size: 13px; margin-bottom: 18px; text-align: center; }
+      #container { display: flex; flex-direction: column; width: 100%; max-width: 400px; }
+      label { font-size: 13px; color: #bbb; margin: 10px 0 4px; }
+      input { width: 100%; padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #333; background-color: #2a2a2a; color: white; box-sizing: border-box; }
+      button { width: 100%; padding: 14px; margin-top: 20px; font-size: 17px; font-weight: bold; border: none; border-radius: 8px; background-color: #FA8C16; color: white; cursor: pointer; }
+      button:active { background-color: #d97706; }
+      #result { margin-top: 14px; font-size: 14px; text-align: center; min-height: 20px; }
+      #result.ok { color: #4ade80; }
+      #result.err { color: #f87171; }
+      .search-box { margin-top: 28px; padding-top: 18px; border-top: 1px solid #333; }
+      .search-row { display: flex; gap: 8px; }
+      .search-row input { flex: 1; }
+      .search-row button { width: auto; padding: 12px 18px; margin-top: 0; background-color: #007AFF; }
     </style>
   </head>
   <body>
     <div id="container">
-      <h3>向电视发送文本</h3>
-      <input id="text" placeholder="请输入..." />
-      <button onclick="send()">发送</button>
+      <h3>胖虎TV 远程配置</h3>
+      <div class="tip">填写后点「保存到电视」，电视端立即生效</div>
+      <label>服务器地址（API）</label>
+      <input id="apiBaseUrl" placeholder="http://192.168.1.250:3008" />
+      <label>用户名</label>
+      <input id="username" placeholder="用户名" />
+      <label>密码</label>
+      <input id="password" type="password" placeholder="密码" />
+      <label>直播源 m3u 地址（可选）</label>
+      <input id="m3uUrl" placeholder="http://.../live.m3u" />
+      <button onclick="save()">保存到电视</button>
+      <div id="result"></div>
+      <div class="search-box">
+        <label>发送文本到电视（搜索页使用）</label>
+        <div class="search-row">
+          <input id="text" placeholder="搜索关键词..." />
+          <button onclick="send()">发送</button>
+        </div>
+      </div>
     </div>
     <script>
+      const CURRENT = ${currentJson};
       window.addEventListener('DOMContentLoaded', () => {
-        fetch('/handshake', { method: 'POST' }).catch(err => logger.info('Handshake failed:', err));
+        for (const k of ['apiBaseUrl', 'username', 'password', 'm3uUrl']) {
+          if (CURRENT[k]) document.getElementById(k).value = CURRENT[k];
+        }
+        fetch('/handshake', { method: 'POST' }).catch(() => {});
       });
-      function send() {
-        const input = document.getElementById("text");
-        const value = input.value;
-        if (value) {
-          fetch("/message", {
+      function show(cls, msg) {
+        const el = document.getElementById('result');
+        el.className = cls; el.textContent = msg;
+      }
+      async function save() {
+        try {
+          const body = {
+            apiBaseUrl: document.getElementById('apiBaseUrl').value.trim(),
+            username: document.getElementById('username').value.trim(),
+            password: document.getElementById('password').value,
+            m3uUrl: document.getElementById('m3uUrl').value.trim(),
+          };
+          if (!body.apiBaseUrl) { show('err', '服务器地址不能为空'); return; }
+          const res = await fetch('/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: value })
-          })
-          .catch(err => logger.info('Message send failed:', err));
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          if (data.status === 'ok') show('ok', data.message || '已保存并生效');
+          else show('err', data.message || '保存失败');
+        } catch (e) { show('err', '发送失败：' + e); }
+      }
+      async function send() {
+        const input = document.getElementById('text');
+        const value = input.value;
+        if (value) {
+          await fetch('/message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: value }),
+          }).catch(() => {});
           input.value = '';
         }
       }
@@ -49,10 +115,24 @@ const getRemotePageHTML = () => {
   `;
 };
 
+interface RemoteControlActions {
+  onMessage: (message: string) => void;
+  onHandshake: () => void;
+  /** 返回电视端当前配置（供表单回显） */
+  getConfig: () => RemoteConfigPayload | Promise<RemoteConfigPayload>;
+  /** 应用手机端提交的配置，返回 { status, message } */
+  applyConfig: (config: RemoteConfigPayload) => Promise<{ status: "ok" | "error"; message: string }>;
+}
+
 class RemoteControlService {
   private httpServer: TCPHttpServer;
   private onMessage: (message: string) => void = () => {};
   private onHandshake: () => void = () => {};
+  private getConfig: () => RemoteConfigPayload | Promise<RemoteConfigPayload> = () => ({});
+  private applyConfig: RemoteControlActions["applyConfig"] = async () => ({
+    status: "error",
+    message: "未注册配置处理",
+  });
 
   constructor() {
     this.httpServer = new TCPHttpServer();
@@ -60,7 +140,7 @@ class RemoteControlService {
   }
 
   private setupRequestHandler() {
-    this.httpServer.setRequestHandler((request) => {
+    this.httpServer.setRequestHandler(async (request) => {
       logger.debug("[RemoteControl] Received request:", request.method, request.url);
 
       try {
@@ -68,8 +148,25 @@ class RemoteControlService {
           return {
             statusCode: 200,
             headers: { "Content-Type": "text/html; charset=utf-8" },
-            body: getRemotePageHTML(),
+            body: getRemotePageHTML(await this.getConfig()),
           };
+        } else if (request.method === "POST" && request.url === "/config") {
+          try {
+            const parsedBody = JSON.parse(request.body || "{}");
+            const result = await this.applyConfig(parsedBody || {});
+            return {
+              statusCode: 200,
+              headers: { "Content-Type": "application/json; charset=utf-8" },
+              body: JSON.stringify(result),
+            };
+          } catch (parseError) {
+            logger.info("[RemoteControl] Failed to parse config body:", parseError);
+            return {
+              statusCode: 400,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: "error", message: "Invalid JSON" }),
+            };
+          }
         } else if (request.method === "POST" && request.url === "/message") {
           try {
             const parsedBody = JSON.parse(request.body || "{}");
@@ -115,9 +212,11 @@ class RemoteControlService {
     });
   }
 
-  public init(actions: { onMessage: (message: string) => void; onHandshake: () => void }) {
+  public init(actions: RemoteControlActions) {
     this.onMessage = actions.onMessage;
     this.onHandshake = actions.onHandshake;
+    this.getConfig = actions.getConfig;
+    this.applyConfig = actions.applyConfig;
   }
 
   public async startServer(): Promise<string> {

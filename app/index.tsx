@@ -38,14 +38,25 @@ export default function HomeScreen() {
     loading,
     loadingMore,
     error,
+    sources,
+    selectedSource,
+    sourceReady,
+    initSelectedSource,
     fetchInitialData,
     loadMoreData,
     selectCategory,
+    selectSource,
     refreshPlayRecords,
     clearError,
   } = useHomeStore();
   const { isLoggedIn, logout } = useAuthStore();
   const apiConfigStatus = useApiConfig();
+
+  // 冷启动恢复已选源（完成后 sourceReady 置位，数据加载才放行）
+  useEffect(() => {
+    initSelectedSource();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -88,7 +99,7 @@ export default function HomeScreen() {
 
   // 统一的数据获取逻辑
   useEffect(() => {
-    if (!selectedCategory) return;
+    if (!selectedCategory || !sourceReady) return;
 
     // 如果是容器分类且没有选择标签，设置默认标签
     if (selectedCategory.tags && !selectedCategory.tag) {
@@ -112,6 +123,7 @@ export default function HomeScreen() {
   }, [
     selectedCategory,
     selectedCategory?.tag,
+    sourceReady,
     apiConfigStatus.isConfigured,
     apiConfigStatus.needsConfiguration,
     fetchInitialData,
@@ -272,6 +284,26 @@ export default function HomeScreen() {
       fontSize: deviceType === "mobile" ? 14 : 16,
       fontWeight: "500",
     },
+    sourceRowContainer: {
+      alignItems: "center",
+    },
+    sourceRowLabel: {
+      fontSize: deviceType === "mobile" ? 12 : 14,
+      color: "#888",
+      marginRight: spacing / 2,
+    },
+    sourceButton: {
+      paddingHorizontal: deviceType === "tv" ? spacing / 4 : spacing / 2,
+      paddingVertical: spacing / 4,
+      borderRadius: deviceType === "mobile" ? 6 : 8,
+      marginHorizontal: deviceType === "tv" ? spacing / 4 : spacing / 2,
+      borderWidth: 1,
+      borderColor: "#444",
+    },
+    sourceText: {
+      fontSize: deviceType === "mobile" ? 12 : 14,
+      fontWeight: "500",
+    },
     contentContainer: {
       flex: 1,
     },
@@ -284,6 +316,33 @@ export default function HomeScreen() {
 
       {/* 顶部导航 */}
       {renderHeader()}
+
+      {/* 源选择器（选源后分类与内容按源加载） */}
+      {sources.length > 0 && (
+        <View style={[dynamicStyles.categoryContainer, dynamicStyles.sourceRowContainer]}>
+          <ThemedText style={dynamicStyles.sourceRowLabel}>源</ThemedText>
+          <FlatList
+            data={[{ id: "", name: "全部" }, ...sources]}
+            renderItem={({ item }) => {
+              const isSelected = selectedSource === item.id;
+              return (
+                <StyledButton
+                  text={item.name}
+                  onPress={() => selectSource(item.id)}
+                  isSelected={isSelected}
+                  style={dynamicStyles.sourceButton}
+                  textStyle={dynamicStyles.sourceText}
+                  variant="ghost"
+                />
+              );
+            }}
+            keyExtractor={(item) => item.id || "__all__"}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={dynamicStyles.categoryListContent}
+          />
+        </View>
+      )}
 
       {/* 分类选择器 */}
       <View style={dynamicStyles.categoryContainer}>

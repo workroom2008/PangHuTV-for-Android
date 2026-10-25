@@ -1,6 +1,7 @@
 import React, { useCallback } from "react";
 import { View, Switch, StyleSheet, Pressable, Animated, Platform, TouchableOpacity } from "react-native";
 import { useTVEventHandler } from "react-native";
+import QRCode from "react-native-qrcode-svg";
 import { ThemedText } from "@/components/ThemedText";
 import { SettingsSection } from "./SettingsSection";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -89,19 +90,33 @@ export const RemoteInputSection: React.FC<RemoteInputSectionProps> = ({ onChange
 
       {remoteInputEnabled && (
         <View style={styles.statusContainer}>
+          <View style={styles.qrRow}>
+            {isServerRunning && serverUrl ? (
+              <View style={styles.qrBox}>
+                <QRCode value={serverUrl} size={128} color="#000000" backgroundColor="#FFFFFF" />
+              </View>
+            ) : (
+              <View style={[styles.qrBox, styles.qrPlaceholder]}>
+                <ThemedText style={styles.qrPlaceholderText}>等待服务启动…</ThemedText>
+              </View>
+            )}
+            <View style={styles.qrInfo}>
+              <ThemedText style={styles.qrTitle}>扫码远程配置</ThemedText>
+              <ThemedText style={styles.qrTip}>
+                手机扫码打开配置页，可填写服务器地址、用户名、密码、直播源，保存后电视立即生效
+              </ThemedText>
+              {serverUrl && (
+                <ThemedText style={styles.qrUrl}>{serverUrl}</ThemedText>
+              )}
+            </View>
+          </View>
+
           <View style={styles.statusItem}>
             <ThemedText style={styles.statusLabel}>服务状态：</ThemedText>
             <ThemedText style={[styles.statusValue, { color: isServerRunning ? Colors.dark.primary : "#FF6B6B" }]}>
               {isServerRunning ? "运行中" : "已停止"}
             </ThemedText>
           </View>
-
-          {serverUrl && (
-            <View style={styles.statusItem}>
-              <ThemedText style={styles.statusLabel}>访问地址：</ThemedText>
-              <ThemedText style={styles.statusValue}>{serverUrl}</ThemedText>
-            </View>
-          )}
 
           {error && (
             <View style={styles.statusItem}>
@@ -139,6 +154,47 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: "#2a2a2c",
     borderRadius: 8,
+  },
+  qrRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  qrBox: {
+    padding: 10,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    marginRight: 16,
+  },
+  qrPlaceholder: {
+    width: 128,
+    height: 128,
+    backgroundColor: "#3a3a3c",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  qrPlaceholderText: {
+    fontSize: 12,
+    color: "#888",
+    textAlign: "center",
+  },
+  qrInfo: {
+    flex: 1,
+  },
+  qrTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 6,
+  },
+  qrTip: {
+    fontSize: 12,
+    color: "#999",
+    lineHeight: 18,
+    marginBottom: 6,
+  },
+  qrUrl: {
+    fontSize: 12,
+    color: Colors.dark.primary,
   },
   statusItem: {
     flexDirection: "row",
