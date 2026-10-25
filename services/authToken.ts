@@ -8,15 +8,26 @@ export interface ServerFlags {
   requireWebLogin: boolean;
 }
 
+// 同步镜像：URL 构造（海报/播放地址追加 token）需要同步取 token
+let cachedToken: string | null = null;
+
 export async function getAuthToken(): Promise<string | null> {
-  return AsyncStorage.getItem(AUTH_TOKEN_KEY);
+  const t = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+  cachedToken = t;
+  return t;
+}
+
+export function getCachedAuthToken(): string | null {
+  return cachedToken;
 }
 
 export async function setAuthToken(token: string): Promise<void> {
+  cachedToken = token;
   await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
 }
 
 export async function clearAuthToken(): Promise<void> {
+  cachedToken = null;
   await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
 }
 

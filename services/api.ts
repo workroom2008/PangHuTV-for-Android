@@ -1,11 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   getAuthToken,
+  getCachedAuthToken,
   setAuthToken,
   clearAuthToken,
   setServerFlags,
   clearServerFlags,
 } from "./authToken";
+import { toPlaybackUrl } from "./playbackUrl";
 
 // region: --- 胖虎请求基座 ---
 // 会话恢复回调（由 authStore 注册），401 时自动重登并重试一次
@@ -109,7 +111,7 @@ export interface VideoDetail {
 }
 
 export interface SearchResult {
-  id: number;
+  id: string;
   title: string;
   poster: string;
   episodes: string[];
@@ -119,6 +121,14 @@ export interface SearchResult {
   year: string;
   desc?: string;
   type_name?: string;
+}
+
+export interface PlayInfoDetail {
+  detail: VideoDetail;
+  sources: SearchResult[];
+  currentSource: string;
+  currentEpisode: number;
+  relate: SearchResult[];
 }
 
 export interface Favorite {
@@ -262,10 +272,25 @@ export class API {
     return panghuFetch(this.baseURL, "/api/session/status");
   }
 
-  getImageProxyUrl(imageUrl: string): string {
-    return `${this.baseURL}/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+  /** 海报/图片地址：相对路径拼 origin；cover/静态海报在私有化时追加 token */
+  processImageUrl(imageUrl: string): string {
+    if (!imageUrl || /^https?:\/\//i.test(imageUrl) || !imageUrl.startsWith("/")) {
+      return imageUrl;
+    }
+    let url = `${this.baseURL}${imageUrl}`;
+    if (
+      isPrivateAccess() &&
+      (imageUrl.startsWith("/api/cover") || imageUrl.startsWith("/api/upload/pic/poster"))
+    ) {
+      const token = getCachedAuthToken();
+      if (token) {
+        url += `${imageUrl.includes("?") ? "&" : "?"}token=${token}`;
+      }
+    }
+    return url;
   }
 
+  /** 豆瓣数据（Task 5 换成胖虎首页后删除） */
   async getDoubanData(
     type: "movie" | "tv",
     tag: string,
@@ -273,33 +298,120 @@ export class API {
     pageStart: number = 0
   ): Promise<DoubanResponse> {
     const url = `/api/douban?type=${type}&tag=${encodeURIComponent(tag)}&pageSize=${pageSize}&pageStart=${pageStart}`;
-    const response = await this._fetch(url);
-    return response.json();
+    const data = await panghuFetch(this.baseURL, url, {});
+    return data as DoubanResponse;
   }
 
-  async searchVideos(query: string): Promise<{ results: SearchResult[] }> {
-    const url = `/api/search?q=${encodeURIComponent(query)}`;
-    const response = await this._fetch(url);
-    return response.json();
+  /** 启用采集源列表 */
+  async getApiSources(signal?: AbortSignal): Promise<ApiSite[]> {
+    const data = await panghuFetch(this.baseURL, "/api/sources", { signal });
+    return (data || []).map((s: any) => ({ key: String(s.id), api: "", name: s.name ?? "" }));
   }
 
-  async searchVideo(query: string, resourceId: string, signal?: AbortSignal): Promise<{ results: SearchResult[] }> {
-    const url = `/api/search/one?q=${encodeURIComponent(query)}&resourceId=${encodeURIComponent(resourceId)}`;
-    const response = await this._fetch(url, { signal });
-    const { results } = await response.json();
-    return { results: results.filter((item: any) => item.title === query )};
+  private mapMovieBasicToSearchResult(item: any, sourceNameMap: Map<string, string>): SearchResult {
+    const sourceId = String(item.sourceId ?? "");
+    return {
+      id: String(item.id),
+      title: item.name ?? "",
+      poster: this.processImageUrl(item.picture ?? ""),
+      episodes: [],
+      source: sourceId,
+      source_name: sourceNameMap.get(sourceId) ?? sourceId,
+      year: String(item.year ?? ""),
+      desc: item.blurb || undefined,
+      type_name: item.cName || undefined,
+    };
   }
 
-  async getResources(signal?: AbortSignal): Promise<ApiSite[]> {
-    const url = `/api/search/resources`;
-    const response = await this._fetch(url, { signal });
-    return response.json();
+  private parseSourceNameMap(data: any): Map<string, string> {
+    return new Map<string, string>(
+      ((data?.sources || []) as any[]).map((s) => [String(s.id), String(s.name ?? "")])
+    );
   }
 
-  async getVideoDetail(source: string, id: string): Promise<VideoDetail> {
-    const url = `/api/detail?source=${source}&id=${id}`;
-    const response = await this._fetch(url);
-    return response.json();
+  /** 库存聚合搜索 */
+  async searchByKeyword(
+    q: string,
+    current = 1,
+    pageSize = 50,
+    signal?: AbortSignal
+  ): Promise<SearchResult[]> {
+    const url = `/api/searchFilm?keyword=${encodeURIComponent(q)}&current=${current}&pageSize=${pageSize}`;
+    const data = await panghuFetch(this.baseURL, url, { signal });
+    const nameMap = this.parseSourceNameMap(data);
+    return ((data?.list || []) as any[]).map((item) => this.mapMovieBasicToSearchResult(item, nameMap));
+  }
+
+  /** 单源库存搜索 */
+  async searchBySource(
+    q: string,
+    resourceId: string,
+    signal?: AbortSignal
+  ): Promise<SearchResult[]> {
+    const url = `/api/searchFilm?keyword=${encodeURIComponent(q)}&source=${encodeURIComponent(resourceId)}&current=1&pageSize=50`;
+    const data = await panghuFetch(this.baseURL, url, { signal });
+    const nameMap = this.parseSourceNameMap(data);
+    return ((data?.list || []) as any[]).map((item) => this.mapMovieBasicToSearchResult(item, nameMap));
+  }
+
+  /** 详情 + 播放信息：detail.List 线路 → 每线路一个 SearchResult（胖虎"线路"对应 OrionTV"源"） */
+  async getPlayInfoDetail(
+    id: string,
+    playFrom: string,
+    episode: number,
+    signal?: AbortSignal
+  ): Promise<PlayInfoDetail> {
+    const url = `/api/filmPlayInfo?id=${encodeURIComponent(id)}&playFrom=${encodeURIComponent(playFrom)}&episode=${episode}`;
+    const data = await panghuFetch(this.baseURL, url, { signal });
+    const d = data?.detail || {};
+
+    const videoDetail: VideoDetail = {
+      id: String(d.Id ?? id),
+      title: d.Name ?? "",
+      poster: this.processImageUrl(d.Picture ?? ""),
+      source: String(data?.currentPlayFrom ?? playFrom ?? ""),
+      source_name: String(data?.currentPlayFrom ?? playFrom ?? ""),
+      desc: d.Content || d.Blurb || undefined,
+      type: d.CName || undefined,
+      year: d.Year || undefined,
+      area: d.Area || undefined,
+      director: d.Director || undefined,
+      actor: d.Actor || undefined,
+      remarks: d.Remarks || undefined,
+    };
+
+    const sources: SearchResult[] = ((d.List || []) as any[])
+      .map((line) => ({
+        id: String(d.Id ?? id),
+        title: d.Name ?? "",
+        poster: videoDetail.poster,
+        episodes: ((line.LinkList || []) as any[]).map((l) =>
+          toPlaybackUrl(String(l.link ?? ""), this.baseURL)
+        ),
+        source: String(line.Id ?? line.SourceId ?? ""),
+        source_name: line.Name ?? "",
+        year: d.Year || undefined,
+        desc: videoDetail.desc,
+        type_name: d.CName || undefined,
+      }))
+      .filter((s) => !!s.source);
+
+    if (playFrom) {
+      sources.sort((a, b) => Number(b.source === playFrom) - Number(a.source === playFrom));
+    }
+
+    const relateNameMap = new Map<string, string>();
+    const relate = ((data?.relate || []) as any[]).map((item) =>
+      this.mapMovieBasicToSearchResult(item, relateNameMap)
+    );
+
+    return {
+      detail: videoDetail,
+      sources,
+      currentSource: String(data?.currentPlayFrom ?? ""),
+      currentEpisode: Number(data?.currentEpisode ?? 0),
+      relate,
+    };
   }
 }
 

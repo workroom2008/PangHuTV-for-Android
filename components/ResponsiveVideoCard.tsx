@@ -74,7 +74,7 @@ const ResponsiveVideoCard = forwardRef<View, VideoCardProps>(
       } else {
         router.push({
           pathname: "/detail",
-          params: { source, q: title },
+          params: { source, id, q: title },
         });
       }
     };
@@ -211,7 +211,7 @@ const ResponsiveVideoCard = forwardRef<View, VideoCardProps>(
           delayLongPress={responsiveConfig.deviceType === 'mobile' ? 500 : 1000}
         >
           <View style={dynamicStyles.card}>
-            <Image source={{ uri: api.getImageProxyUrl(poster) }} style={styles.poster} />
+            <Image source={{ uri: api.processImageUrl(poster) }} style={styles.poster} />
             {(isFocused && responsiveConfig.deviceType === 'tv') && (
               <View style={dynamicStyles.overlay}>
                 {isContinueWatching && (

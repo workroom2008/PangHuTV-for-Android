@@ -75,7 +75,7 @@ const VideoCard = forwardRef<View, VideoCardProps>(
       } else {
         router.push({
           pathname: "/detail",
-          params: { source, q: title },
+          params: { source, id, q: title },
         });
       }
     };
@@ -166,7 +166,7 @@ const VideoCard = forwardRef<View, VideoCardProps>(
           delayLongPress={1000}
         >
           <View style={styles.card}>
-            <Image source={{ uri: api.getImageProxyUrl(poster) }} style={styles.poster} />
+            <Image source={{ uri: api.processImageUrl(poster) }} style={styles.poster} />
             {isFocused && (
               <View style={styles.overlay}>
                 {isContinueWatching && (

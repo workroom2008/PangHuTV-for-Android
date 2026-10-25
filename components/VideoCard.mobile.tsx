@@ -68,7 +68,7 @@ const VideoCardMobile = forwardRef<View, VideoCardMobileProps>(
       } else {
         router.push({
           pathname: "/detail",
-          params: { source, q: title },
+          params: { source, id, q: title },
         });
       }
     };
@@ -122,7 +122,7 @@ const VideoCardMobile = forwardRef<View, VideoCardMobileProps>(
           delayLongPress={800}
         >
           <View style={styles.card}>
-            <Image source={{ uri: api.getImageProxyUrl(poster) }} style={styles.poster} />
+            <Image source={{ uri: api.processImageUrl(poster) }} style={styles.poster} />
             
             {/* 进度条 */}
             {isContinueWatching && (

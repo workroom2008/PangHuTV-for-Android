@@ -67,9 +67,9 @@ export default function SearchScreen() {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.searchVideos(term);
-      if (response.results.length > 0) {
-        setResults(response.results);
+      const results = await api.searchByKeyword(term);
+      if (results.length > 0) {
+        setResults(results);
       } else {
         setError("没有找到相关内容");
       }

@@ -70,7 +70,7 @@ const VideoCardTablet = forwardRef<View, VideoCardTabletProps>(
       } else {
         router.push({
           pathname: "/detail",
-          params: { source, q: title },
+          params: { source, id, q: title },
         });
       }
     };
@@ -150,7 +150,7 @@ const VideoCardTablet = forwardRef<View, VideoCardTabletProps>(
           delayLongPress={900}
         >
           <View style={[styles.card, isPressed && styles.cardPressed]}>
-            <Image source={{ uri: api.getImageProxyUrl(poster) }} style={styles.poster} />
+            <Image source={{ uri: api.processImageUrl(poster) }} style={styles.poster} />
             
             {/* 悬停效果遮罩 */}
             {isPressed && (
