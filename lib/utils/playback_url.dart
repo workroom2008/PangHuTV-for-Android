@@ -14,7 +14,30 @@ class PlaybackUrl {
     var url = resolve(link);
     if (!isPlayableLink(url)) return '';
     url = hlsExoAlias(url);
-    return appendPrivateAccessQuery(url);
+    url = appendPrivateAccessQuery(url);
+    url = appendServerMediaProxy(url);
+    return url;
+  }
+
+  /// 给本站 /api/hls 地址补 client=tv，让服务端把分片也代理下来。
+  ///
+  /// 参数名历史上叫 client=tv（最初为老 Android TV 根证书不全而加），
+  /// 但现在真正的价值是「线路」：实测极品源分片直连 CDN 只有 38KB/s
+  /// （2.3MB 分片 60 秒都下不完），经服务端代理是 1.9MB/s，差 50 倍。
+  /// 手机端直连表现为「播 1-2 秒卡住、提示网络较慢」，与源无关而与线路有关，
+  /// 所以手机端也必须走代理。
+  static String appendServerMediaProxy(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme) return url;
+    if (!needsServerApiAuth(url)) return url;
+    // hlsExoAlias 已把 /api/hls 改成 /api/hls.m3u8，两种都要认
+    final path = uri.path.toLowerCase();
+    if (!path.startsWith('/api/hls')) return url;
+
+    final q = Map<String, String>.from(uri.queryParameters);
+    if (q['client'] == 'tv') return url;
+    q['client'] = 'tv';
+    return uri.replace(queryParameters: q).toString();
   }
 
   static String prepareMediaUrl(String link) {
