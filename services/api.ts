@@ -102,6 +102,8 @@ export interface SearchResult {
   id: string;
   title: string;
   poster: string;
+  /** 未拼 origin/token 的原始海报路径（存收藏/播放记录用，渲染时再过 processImageUrl） */
+  rawPoster?: string;
   episodes: string[];
   source: string;
   source_name: string;
@@ -338,6 +340,7 @@ export class API {
       id: String(item.id),
       title: item.name ?? "",
       poster: this.processImageUrl(item.picture ?? ""),
+      rawPoster: String(item.picture ?? ""),
       episodes: [],
       source: sourceId,
       source_name: sourceNameMap.get(sourceId) ?? sourceId,
@@ -378,7 +381,10 @@ export class API {
     return ((data?.list || []) as any[]).map((item) => this.mapMovieBasicToSearchResult(item, nameMap));
   }
 
-  /** 详情 + 播放信息：detail.List 线路 → 每线路一个 SearchResult（胖虎"线路"对应 OrionTV"源"） */
+  /** 详情 + 播放信息：detail.list 线路 → 每线路一个 SearchResult（胖虎"线路"对应 OrionTV"源"）
+   *  服务端 JSON 字段（model/film.go）：detail.{id,name,picture} 顶层小写，
+   *  元数据在 detail.descriptor.*（year/area/director/actor/content/blurb/cName/remarks），
+   *  线路列表 detail.list[].{id,sourceId,name,linkList[].{episode,link}}。 */
   async getPlayInfoDetail(
     id: string,
     playFrom: string,
@@ -388,35 +394,38 @@ export class API {
     const url = `/api/filmPlayInfo?id=${encodeURIComponent(id)}&playFrom=${encodeURIComponent(playFrom)}&episode=${episode}`;
     const data = await panghuFetch(this.baseURL, url, { signal });
     const d = data?.detail || {};
+    const desc = d.descriptor || {};
 
+    const rawPicture = String(d.picture ?? "");
     const videoDetail: VideoDetail = {
-      id: String(d.Id ?? id),
-      title: d.Name ?? "",
-      poster: this.processImageUrl(d.Picture ?? ""),
+      id: String(d.id ?? id),
+      title: d.name ?? "",
+      poster: this.processImageUrl(rawPicture),
       source: String(data?.currentPlayFrom ?? playFrom ?? ""),
       source_name: String(data?.currentPlayFrom ?? playFrom ?? ""),
-      desc: d.Content || d.Blurb || undefined,
-      type: d.CName || undefined,
-      year: d.Year || undefined,
-      area: d.Area || undefined,
-      director: d.Director || undefined,
-      actor: d.Actor || undefined,
-      remarks: d.Remarks || undefined,
+      desc: desc.content || desc.blurb || undefined,
+      type: desc.cName || undefined,
+      year: desc.year || undefined,
+      area: desc.area || undefined,
+      director: desc.director || undefined,
+      actor: desc.actor || undefined,
+      remarks: desc.remarks || undefined,
     };
 
-    const sources: SearchResult[] = ((d.List || []) as any[])
+    const sources: SearchResult[] = ((d.list || []) as any[])
       .map((line) => ({
-        id: String(d.Id ?? id),
-        title: d.Name ?? "",
+        id: String(d.id ?? id),
+        title: d.name ?? "",
         poster: videoDetail.poster,
-        episodes: ((line.LinkList || []) as any[]).map((l) =>
+        rawPoster: rawPicture,
+        episodes: ((line.linkList || []) as any[]).map((l) =>
           toPlaybackUrl(String(l.link ?? ""), this.baseURL)
         ),
-        source: String(line.Id ?? line.SourceId ?? ""),
-        source_name: line.Name ?? "",
-        year: d.Year || undefined,
+        source: String(line.id ?? line.sourceId ?? ""),
+        source_name: line.name ?? "",
+        year: desc.year || undefined,
         desc: videoDetail.desc,
-        type_name: d.CName || undefined,
+        type_name: desc.cName || undefined,
       }))
       .filter((s) => !!s.source);
 

@@ -187,9 +187,10 @@ const useDetailStore = create<DetailState>((set, get) => ({
 
     const { source, id, title, poster, source_name, episodes, year } = detail;
     const favoriteItem = {
-      cover: poster,
+      // 存原始路径（未拼 token）：token 轮换后渲染端重过 processImageUrl 仍有效
+      cover: (detail as any).rawPoster || poster,
       title,
-      poster,
+      poster: (detail as any).rawPoster || poster,
       source_name,
       total_episodes: episodes.length,
       search_title: get().q!,

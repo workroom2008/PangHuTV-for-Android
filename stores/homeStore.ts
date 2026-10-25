@@ -119,20 +119,21 @@ const useHomeStore = create<HomeState>((set, get) => ({
 
         set({ contentData: rowItems, hasMore: false });
       } else if (selectedCategory.kind === "daily") {
+        // pageStart 按固定页幅推进（非 rows.length）：尾页非满页时游标不漂移
         const current = Math.floor(pageStart / PAGE_SIZE) + 1;
         const rows = await api.getDailyUpdates(0, current, PAGE_SIZE);
         set((state) => ({
           contentData: current === 1 ? rows : [...state.contentData, ...rows],
-          pageStart: pageStart + rows.length,
-          hasMore: rows.length > 0,
+          pageStart: pageStart + PAGE_SIZE,
+          hasMore: rows.length === PAGE_SIZE,
         }));
       } else if (selectedCategory.kind === "pid" && selectedCategory.pid != null) {
         const current = Math.floor(pageStart / PAGE_SIZE) + 1;
         const rows = await api.getClassifyPage(selectedCategory.pid, { current });
         set((state) => ({
           contentData: current === 1 ? rows : [...state.contentData, ...rows],
-          pageStart: pageStart + rows.length,
-          hasMore: rows.length > 0,
+          pageStart: pageStart + PAGE_SIZE,
+          hasMore: rows.length === PAGE_SIZE,
         }));
       } else {
         set({ hasMore: false });

@@ -112,21 +112,26 @@ describe("胖虎接口映射", () => {
   });
 
   describe("getPlayInfoDetail", () => {
+    // fixture 严格对照服务端真实 JSON（MovieDetailVo：id/name/picture 顶层小写，
+    // 元数据在 descriptor.* 嵌套，线路列表 list[].{id,name,linkList[].link} 小写）
     const PLAY_INFO = {
       code: 0,
       msg: "ok",
       data: {
         detail: {
-          Id: 101,
-          Name: "庆余年",
-          Picture: "/api/cover?url=p.jpg&source=src1",
-          Year: "2024",
-          Area: "内地",
-          Director: "导演甲",
-          Actor: "演员乙",
-          Content: "简介内容",
-          CName: "剧情",
-          Remarks: "更新至36集",
+          id: 101,
+          name: "庆余年",
+          picture: "/api/cover?url=p.jpg&source=src1",
+          descriptor: {
+            year: "2024",
+            area: "内地",
+            director: "导演甲",
+            actor: "演员乙",
+            content: "简介内容",
+            blurb: "简短简介",
+            cName: "剧情",
+            remarks: "更新至36集",
+          },
         },
         current: { episode: 0, link: "http://s/api/hls.m3u8?url=1" },
         currentPlayFrom: "src1",
@@ -141,16 +146,18 @@ describe("胖虎接口映射", () => {
         ...PLAY_INFO.data,
         detail: {
           ...PLAY_INFO.data.detail,
-          List: [
+          list: [
             {
-              Id: "src2",
-              Name: "线路B",
-              LinkList: [{ episode: "1", link: "http://y/1.m3u8" }],
+              id: "src2",
+              sourceId: "src2",
+              name: "线路B",
+              linkList: [{ episode: "1", link: "http://y/1.m3u8" }],
             },
             {
-              Id: "src1",
-              Name: "线路A",
-              LinkList: [
+              id: "src1",
+              sourceId: "src1",
+              name: "线路A",
+              linkList: [
                 { episode: "1", link: "/api/hls?url=1&source=src1" },
                 { episode: "2", link: "http://x/2.m3u8" },
                 { episode: "3", link: "/api/hls?url=3&source=src1" },
@@ -161,7 +168,7 @@ describe("胖虎接口映射", () => {
       },
     };
 
-    it("detail.List 线路 → sources（每线路一个 SearchResult，episodes 经 toPlaybackUrl）", async () => {
+    it("detail.list 线路 → sources（每线路一个 SearchResult，episodes 经 toPlaybackUrl）", async () => {
       (global.fetch as jest.Mock).mockResolvedValue(jsonResponse(DETAIL_WITH_LINKS));
 
       const info = await api.getPlayInfoDetail("101", "src1", 0);
@@ -172,6 +179,9 @@ describe("胖虎接口映射", () => {
       expect(lineA.episodes[0]).toBe("http://s/api/hls.m3u8?url=1&source=src1");
       expect(lineA.episodes[1]).toBe("http://x/2.m3u8");
       expect(info.detail.title).toBe("庆余年");
+      expect(info.detail.year).toBe("2024");
+      expect(info.detail.desc).toBe("简介内容");
+      expect(info.detail.remarks).toBe("更新至36集");
       expect(info.currentSource).toBe("src1");
     });
 
@@ -180,6 +190,13 @@ describe("胖虎接口映射", () => {
 
       const info = await api.getPlayInfoDetail("101", "src1", 0);
       expect(info.sources[0].source).toBe("src1");
+    });
+
+    it("sources 携带 rawPoster（未拼 origin/token 的原始路径）", async () => {
+      (global.fetch as jest.Mock).mockResolvedValue(jsonResponse(DETAIL_WITH_LINKS));
+
+      const info = await api.getPlayInfoDetail("101", "src1", 0);
+      expect(info.sources[0].rawPoster).toBe("/api/cover?url=p.jpg&source=src1");
     });
 
     it("请求参数包含 id/playFrom/episode", async () => {

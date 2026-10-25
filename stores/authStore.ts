@@ -43,8 +43,9 @@ const useAuthStore = create<AuthState>((set, get) => ({
       if (status.authenticated) {
         set({ isLoggedIn: true, isLoginModalVisible: false });
       } else {
+        // JWT 有效但 Redis 会话失效：清 token 后走凭据重登/弹登录框，不留死路
         await clearAuthToken();
-        set({ isLoggedIn: false });
+        await get().restoreSession();
       }
     } catch (error) {
       logger.error("Failed to check login status:", error);

@@ -100,6 +100,32 @@ describe("homeStore（胖虎分类）", () => {
     expect(mockedApi.getClassifyPage).not.toHaveBeenCalled();
   });
 
+  it("非满页后 hasMore=false 且不重复拉同一页", async () => {
+    const fullPage = Array.from({ length: 20 }, (_, i) => ({
+      id: `m${i}`,
+      title: `剧${i}`,
+      poster: "p",
+      source: "src1",
+      source_name: "源A",
+      episodes: [],
+    }));
+    const tailPage = fullPage.slice(0, 7);
+    (mockedApi.getDailyUpdates as jest.Mock)
+      .mockResolvedValueOnce(fullPage)
+      .mockResolvedValueOnce(tailPage);
+
+    useHomeStore.setState({ selectedCategory: { title: "每日更新", kind: "daily" } as any });
+    await useHomeStore.getState().fetchInitialData();
+    await useHomeStore.getState().loadMoreData();
+
+    expect(mockedApi.getDailyUpdates).toHaveBeenCalledTimes(2);
+    expect(mockedApi.getDailyUpdates).toHaveBeenNthCalledWith(1, 0, 1, 20);
+    expect(mockedApi.getDailyUpdates).toHaveBeenNthCalledWith(2, 0, 2, 20);
+    const state = useHomeStore.getState();
+    expect(state.contentData).toHaveLength(27);
+    expect(state.hasMore).toBe(false);
+  });
+
   it("加载失败设 error", async () => {
     (mockedApi.getDailyUpdates as jest.Mock).mockRejectedValue(new Error("Network request failed"));
 

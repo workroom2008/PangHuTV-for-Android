@@ -56,7 +56,7 @@ describe("authStore（胖虎登录链路）", () => {
     expect(state.isLoginModalVisible).toBe(false);
   });
 
-  it("checkLoginStatus：token 存在但 session/status 返回 authenticated:false → isLoggedIn=false", async () => {
+  it("checkLoginStatus：token 校验 authenticated:false → 清 token 后走 restoreSession 自动重登", async () => {
     await setAuthToken("expired-jwt");
     (mockedApi.getSessionStatus as jest.Mock).mockResolvedValue({
       authenticated: false,
@@ -64,12 +64,16 @@ describe("authStore（胖虎登录链路）", () => {
       licensed: true,
       requireWebLogin: false,
     });
+    mockedCreds.get.mockResolvedValue({ username: "admin", password: "pw" });
+    (mockedApi.login as jest.Mock).mockResolvedValue({ ok: true });
 
     await useAuthStore.getState().checkLoginStatus("http://s");
 
     const state = useAuthStore.getState();
-    expect(state.isLoggedIn).toBe(false);
     expect(mockedApi.getSessionStatus).toHaveBeenCalled();
+    expect(mockedApi.login).toHaveBeenCalledWith("admin", "pw");
+    expect(state.isLoggedIn).toBe(true);
+    expect(state.isLoginModalVisible).toBe(false);
   });
 
   it("checkLoginStatus：无 token 且无凭据 → 弹登录框", async () => {

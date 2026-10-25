@@ -370,7 +370,7 @@ const usePlayerStore = create<PlayerState>((set, get) => ({
       };
       PlayRecordManager.save(detail.source, detail.id.toString(), {
         title: detail.title,
-        cover: detail.poster || "",
+        cover: (detail as any).rawPoster || detail.poster || "",
         index: currentEpisodeIndex + 1,
         total_episodes: episodes.length,
         play_time: Math.floor(status.positionMillis / 1000),
