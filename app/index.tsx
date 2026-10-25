@@ -98,6 +98,13 @@ export default function HomeScreen() {
 );
 
   // 统一的数据获取逻辑
+  // 依赖用「分类稳定标识」而不是 selectedCategory 对象：
+  // 对象引用每次 set 都会变，会让本 effect 与 selectCategory 内部流程互相触发二次请求，
+  // 表现为"选源后再选分类要等很久才出内容"。
+  const categoryKey = selectedCategory
+    ? `${selectedCategory.kind}|${selectedCategory.pid ?? ""}|${selectedCategory.tag ?? ""}`
+    : "";
+
   useEffect(() => {
     if (!selectedCategory || !sourceReady) return;
 
@@ -120,9 +127,9 @@ export default function HomeScreen() {
         fetchInitialData();
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    selectedCategory,
-    selectedCategory?.tag,
+    categoryKey,
     sourceReady,
     apiConfigStatus.isConfigured,
     apiConfigStatus.needsConfiguration,

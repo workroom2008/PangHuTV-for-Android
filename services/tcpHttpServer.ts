@@ -67,7 +67,7 @@ class TCPHttpServer {
     }
   }
 
-  private formatHttpResponse(response: HttpResponse): string {
+  private formatHttpResponse(response: HttpResponse): Buffer {
     const statusTexts: { [key: number]: string } = {
       200: 'OK',
       400: 'Bad Request',
@@ -76,22 +76,28 @@ class TCPHttpServer {
     };
 
     const statusText = statusTexts[response.statusCode] || 'Unknown';
-    const headers = {
-      'Content-Length': new TextEncoder().encode(response.body).length.toString(),
+    // 统一按 UTF-8 字节编码：中文/emoji 的字节数与字符数不同，
+    // 之前用字符数当 Content-Length 会让浏览器少读几个字节，JSON 被截断，
+    // 前端就报 "Failed to execute 'json' on 'Response': Unexpected end of JSON input"。
+    const bodyBytes = new TextEncoder().encode(response.body ?? '');
+    const headers: { [key: string]: string } = {
+      ...response.headers,
+      'Content-Type': response.headers?.['Content-Type'] ?? 'text/plain; charset=utf-8',
+      'Content-Length': String(bodyBytes.length),
       'Connection': 'close',
-      ...response.headers
     };
 
-    let httpResponse = `HTTP/1.1 ${response.statusCode} ${statusText}\r\n`;
-    
+    let head = `HTTP/1.1 ${response.statusCode} ${statusText}\r\n`;
     for (const [key, value] of Object.entries(headers)) {
-      httpResponse += `${key}: ${value}\r\n`;
+      head += `${key}: ${value}\r\n`;
     }
-    
-    httpResponse += '\r\n';
-    httpResponse += response.body;
+    head += '\r\n';
 
-    return httpResponse;
+    const headBytes = new TextEncoder().encode(head);
+    const out = new Uint8Array(headBytes.length + bodyBytes.length);
+    out.set(headBytes, 0);
+    out.set(bodyBytes, headBytes.length);
+    return Buffer.from(out.buffer, out.byteOffset, out.byteLength);
   }
 
   public setRequestHandler(handler: RequestHandler) {
@@ -123,42 +129,84 @@ class TCPHttpServer {
       try {
         this.server = TcpSocket.createServer((socket: TcpSocket.Socket) => {
           logger.debug('[TCPHttpServer] Client connected');
-          
-          let requestData = '';
-          
-          socket.on('data', async (data: string | Buffer) => {
-            requestData += data.toString();
-            
-            // Check if we have a complete HTTP request
-            if (requestData.includes('\r\n\r\n')) {
-              try {
-                const request = this.parseHttpRequest(requestData);
-                if (request && this.requestHandler) {
-                  const response = await this.requestHandler(request);
-                  const httpResponse = this.formatHttpResponse(response);
-                  socket.write(httpResponse);
-                } else {
-                  // Send 400 Bad Request for malformed requests
-                  const errorResponse = this.formatHttpResponse({
-                    statusCode: 400,
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: 'Bad Request'
-                  });
-                  socket.write(errorResponse);
-                }
-              } catch (error) {
-                logger.info('[TCPHttpServer] Error handling request:', error);
-                const errorResponse = this.formatHttpResponse({
-                  statusCode: 500,
-                  headers: { 'Content-Type': 'text/plain' },
-                  body: 'Internal Server Error'
-                });
-                socket.write(errorResponse);
-              }
-              
-              socket.end();
-              requestData = '';
+
+          // 按字节累计：中文 UTF-8 是多字节，按字符串拼接再用字符数判断会算错长度
+          const chunks: Uint8Array[] = [];
+          let received = 0;
+          let headerEnd = -1;
+          let bodyNeed = 0;
+          let handled = false;
+
+          const allBytes = (): Uint8Array => {
+            const out = new Uint8Array(received);
+            let offset = 0;
+            for (const c of chunks) {
+              out.set(c, offset);
+              offset += c.length;
             }
+            return out;
+          };
+
+          const tryHandle = async () => {
+            if (handled) return;
+
+            const bytes = allBytes();
+            const decoder = new TextDecoder();
+
+            if (headerEnd < 0) {
+              // 找 \r\n\r\n（字节级）
+              for (let i = 0; i + 3 < bytes.length; i++) {
+                if (bytes[i] === 13 && bytes[i + 1] === 10 && bytes[i + 2] === 13 && bytes[i + 3] === 10) {
+                  headerEnd = i + 4;
+                  break;
+                }
+              }
+              if (headerEnd < 0) return;
+              const headText = decoder.decode(bytes.subarray(0, headerEnd));
+              const m = /content-length:\s*(\d+)/i.exec(headText);
+              bodyNeed = m ? parseInt(m[1], 10) : 0;
+            }
+
+            // 请求体没收全就先等下一个 data 包（大 JSON / 中文配置会分片到达）
+            if (bytes.length - headerEnd < bodyNeed) return;
+
+            handled = true;
+
+            try {
+              const raw = decoder.decode(bytes.subarray(0, headerEnd + bodyNeed));
+              const request = this.parseHttpRequest(raw);
+              if (request && this.requestHandler) {
+                const response = await this.requestHandler(request);
+                socket.write(this.formatHttpResponse(response));
+              } else {
+                socket.write(
+                  this.formatHttpResponse({
+                    statusCode: 400,
+                    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+                    body: 'Bad Request'
+                  })
+                );
+              }
+            } catch (error) {
+              logger.info('[TCPHttpServer] Error handling request:', error);
+              socket.write(
+                this.formatHttpResponse({
+                  statusCode: 500,
+                  headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                  body: JSON.stringify({ status: 'error', message: 'Internal Server Error' })
+                })
+              );
+            }
+
+            socket.end();
+          };
+
+          socket.on('data', (data: string | Buffer) => {
+            const chunk =
+              typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data);
+            chunks.push(chunk);
+            received += chunk.length;
+            void tryHandle();
           });
 
           socket.on('error', (error: Error) => {

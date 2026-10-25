@@ -74,7 +74,14 @@ export async function panghuFetch(
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
-  const body = await response.json();
+  // 服务端 id 为 int64（MissAV 为 19 位），超出 JS 安全整数范围会丢精度
+  // （7154237278261277233 → …278000），解析前把超长数字 id 转成字符串。
+  const text = await response.text();
+  const safeText = text.replace(
+    /("(?:id|sourceMid|mid|dbId|rawId)"\s*:\s*)(-?\d{16,})(?=\s*[,}])/g,
+    '$1"$2"'
+  );
+  const body = JSON.parse(safeText);
   if (body && (body.code === 0 || body.code === 1)) {
     return body.data;
   }
@@ -442,20 +449,23 @@ export class API {
     };
 
     const sources: SearchResult[] = ((d.list || []) as any[])
-      .map((line) => ({
-        id: String(d.id ?? id),
-        title: d.name ?? "",
-        poster: videoDetail.poster,
-        rawPoster: rawPicture,
-        episodes: ((line.linkList || []) as any[]).map((l) =>
-          toPlaybackUrl(String(l.link ?? ""), this.baseURL)
-        ),
-        source: String(line.id ?? line.sourceId ?? ""),
-        source_name: line.name ?? "",
-        year: desc.year || undefined,
-        desc: videoDetail.desc,
-        type_name: desc.cName || undefined,
-      }))
+      .map((line) => {
+        const lineSourceId = String(line.id ?? line.sourceId ?? "");
+        return {
+          id: String(d.id ?? id),
+          title: d.name ?? "",
+          poster: videoDetail.poster,
+          rawPoster: rawPicture,
+          episodes: ((line.linkList || []) as any[]).map((l) =>
+            toPlaybackUrl(String(l.link ?? ""), this.baseURL, lineSourceId)
+          ),
+          source: lineSourceId,
+          source_name: line.name ?? "",
+          year: desc.year || undefined,
+          desc: videoDetail.desc,
+          type_name: desc.cName || undefined,
+        };
+      })
       .filter((s) => !!s.source);
 
     if (playFrom) {

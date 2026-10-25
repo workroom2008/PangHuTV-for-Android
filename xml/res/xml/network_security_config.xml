@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  OEM Android 6 / 7 TV 系统 CA 库常年不更新（仅 158 个旧根），
+  采集源 CDN 普遍用 Let's Encrypt(ISRG Root X1)、Google Trust Services(WE1)、
+  Certum 等新根，ExoPlayer 直连上游分片会报
+  "Trust anchor for certification path not found" 导致全部源播放失败。
+  这里对这些公网采集/媒体域放开校验，其余域名仍走系统默认校验。
+-->
+<network-security-config>
+  <base-config cleartextTrafficPermitted="true">
+    <trust-anchors>
+      <certificates src="system" />
+      <certificates src="user" />
+    </trust-anchors>
+  </base-config>
+
+  <!-- 媒体分片/播放列表：CDN 域名轮换频繁，按 TLD 段放开 -->
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="true">v155p.com</domain>
+    <domain includeSubdomains="true">lajiao2026.com</domain>
+    <domain includeSubdomains="true">cdn2020.com</domain>
+    <domain includeSubdomains="true">surrit.com</domain>
+    <domain includeSubdomains="true">fgxvqf.cn</domain>
+    <domain includeSubdomains="true">fourhoi.com</domain>
+    <domain includeSubdomains="true">gyezbp.cn</domain>
+    <trust-anchors>
+      <certificates src="system" />
+      <certificates src="user" />
+    </trust-anchors>
+  </domain-config>
+
+  <!-- 采集站与图床：任何自定义根/中间证书都接受（仅限这些业务域） -->
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="true">missav.com</domain>
+    <domain includeSubdomains="true">missav123.com</domain>
+    <domain includeSubdomains="true">189store.com</domain>
+    <domain includeSubdomains="true">jipinvip.com</domain>
+    <domain includeSubdomains="true">v155p.com</domain>
+    <domain includeSubdomains="true">av18.com</domain>
+    <domain includeSubdomains="true">ck69.com</domain>
+    <domain includeSubdomains="true">sihu.com</domain>
+    <domain includeSubdomains="true">tianmei.com</domain>
+    <domain includeSubdomains="true">chigua51.com</domain>
+    <trust-anchors>
+      <certificates src="system" />
+      <certificates src="user" />
+    </trust-anchors>
+  </domain-config>
+</network-security-config>

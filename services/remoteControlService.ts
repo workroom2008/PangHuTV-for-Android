@@ -56,7 +56,7 @@ const getRemotePageHTML = (current: RemoteConfigPayload) => {
       <input id="password" type="password" placeholder="密码" />
       <label>直播源 m3u 地址（可选）</label>
       <input id="m3uUrl" placeholder="http://.../live.m3u" />
-      <button onclick="save()">保存到电视</button>
+      <button id="saveBtn" onclick="save()">保存到电视</button>
       <div id="result"></div>
       <div class="search-box">
         <label>发送文本到电视（搜索页使用）</label>
@@ -79,6 +79,8 @@ const getRemotePageHTML = (current: RemoteConfigPayload) => {
         el.className = cls; el.textContent = msg;
       }
       async function save() {
+        const btn = document.getElementById('saveBtn');
+        btn.disabled = true;
         try {
           const body = {
             apiBaseUrl: document.getElementById('apiBaseUrl').value.trim(),
@@ -87,15 +89,22 @@ const getRemotePageHTML = (current: RemoteConfigPayload) => {
             m3uUrl: document.getElementById('m3uUrl').value.trim(),
           };
           if (!body.apiBaseUrl) { show('err', '服务器地址不能为空'); return; }
+          show('', '正在保存…');
           const res = await fetch('/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
           });
-          const data = await res.json();
-          if (data.status === 'ok') show('ok', data.message || '已保存并生效');
-          else show('err', data.message || '保存失败');
-        } catch (e) { show('err', '发送失败：' + e); }
+          // 电视端是自建 TCP 服务，偶发空响应/被截断：先取文本再解析，避免 res.json() 直接抛
+          const text = await res.text();
+          let data = null;
+          if (text) { try { data = JSON.parse(text); } catch (e) { data = null; } }
+          if (data && data.status === 'ok') show('ok', data.message || '已保存并生效');
+          else if (data) show('err', data.message || '保存失败');
+          else if (res.status === 200) show('ok', '已保存并生效（电视端无回执，请到电视上确认服务器地址）');
+          else show('err', '电视端返回异常（HTTP ' + res.status + '），请确认电视与手机在同一网络后重试');
+        } catch (e) { show('err', '发送失败：' + e + '（请确认电视端远程输入已开启）'); }
+        finally { btn.disabled = false; }
       }
       async function send() {
         const input = document.getElementById('text');
@@ -143,14 +152,18 @@ class RemoteControlService {
     this.httpServer.setRequestHandler(async (request) => {
       logger.debug("[RemoteControl] Received request:", request.method, request.url);
 
+      // 浏览器可能带查询串或结尾斜杠，路由按路径比较
+      const path = (request.url || "/").split("?")[0].replace(/\/+$/, "") || "/";
+      const method = (request.method || "GET").toUpperCase();
+
       try {
-        if (request.method === "GET" && request.url === "/") {
+        if (method === "GET" && (path === "/" || path === "/index.html")) {
           return {
             statusCode: 200,
             headers: { "Content-Type": "text/html; charset=utf-8" },
             body: getRemotePageHTML(await this.getConfig()),
           };
-        } else if (request.method === "POST" && request.url === "/config") {
+        } else if (method === "POST" && path === "/config") {
           try {
             const parsedBody = JSON.parse(request.body || "{}");
             const result = await this.applyConfig(parsedBody || {});
@@ -162,12 +175,12 @@ class RemoteControlService {
           } catch (parseError) {
             logger.info("[RemoteControl] Failed to parse config body:", parseError);
             return {
-              statusCode: 400,
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ status: "error", message: "Invalid JSON" }),
+              statusCode: 200,
+              headers: { "Content-Type": "application/json; charset=utf-8" },
+              body: JSON.stringify({ status: "error", message: "配置内容解析失败，请重试" }),
             };
           }
-        } else if (request.method === "POST" && request.url === "/message") {
+        } else if (method === "POST" && path === "/message") {
           try {
             const parsedBody = JSON.parse(request.body || "{}");
             const message = parsedBody.message;
@@ -182,31 +195,31 @@ class RemoteControlService {
           } catch (parseError) {
             logger.info("[RemoteControl] Failed to parse message body:", parseError);
             return {
-              statusCode: 400,
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ error: "Invalid JSON" }),
+              statusCode: 200,
+              headers: { "Content-Type": "application/json; charset=utf-8" },
+              body: JSON.stringify({ status: "error", message: "消息解析失败" }),
             };
           }
-        } else if (request.method === "POST" && request.url === "/handshake") {
+        } else if (method === "POST" && path === "/handshake") {
           this.onHandshake();
           return {
             statusCode: 200,
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json; charset=utf-8" },
             body: JSON.stringify({ status: "ok" }),
           };
         } else {
           return {
             statusCode: 404,
-            headers: { "Content-Type": "text/plain" },
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
             body: "Not Found",
           };
         }
       } catch (error) {
         logger.info("[RemoteControl] Request handler error:", error);
         return {
-          statusCode: 500,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ error: "Internal Server Error" }),
+          statusCode: 200,
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+          body: JSON.stringify({ status: "error", message: "电视端处理异常，请重试" }),
         };
       }
     });

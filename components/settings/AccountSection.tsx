@@ -1,9 +1,13 @@
-import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "react";
+import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from "react";
 import { TextInput, StyleSheet } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { LoginCredentialsManager } from "@/services/storage";
+import { useSettingsFocus } from "@/hooks/useSettingsFocus";
 import { Colors } from "@/constants/Colors";
+
+const FOCUS_KEY_USERNAME = "settings.account.username";
+const FOCUS_KEY_PASSWORD = "settings.account.password";
 
 export interface AccountSectionRef {
   setUsernameValue: (value: string) => void;
@@ -48,6 +52,20 @@ export const AccountSection = forwardRef<AccountSectionRef, AccountSectionProps>
       setPasswordValue: setPassword,
     }));
 
+    const focusRegistry = useSettingsFocus();
+    const focusUsername = useCallback(() => usernameRef.current?.focus(), []);
+    const focusPassword = useCallback(() => passwordRef.current?.focus(), []);
+
+    // 注册到设置页焦点链（用户名 → 密码，按视觉顺序）
+    useEffect(() => {
+      focusRegistry.register({ key: FOCUS_KEY_USERNAME, focus: focusUsername });
+      focusRegistry.register({ key: FOCUS_KEY_PASSWORD, focus: focusPassword });
+      return () => {
+        focusRegistry.unregister(FOCUS_KEY_USERNAME);
+        focusRegistry.unregister(FOCUS_KEY_PASSWORD);
+      };
+    }, [focusRegistry, focusUsername, focusPassword]);
+
     const inputStyle = (focused: boolean) => [styles.input, focused && styles.inputFocused];
 
     return (
@@ -58,6 +76,7 @@ export const AccountSection = forwardRef<AccountSectionRef, AccountSectionProps>
         </ThemedText>
         <TextInput
           ref={usernameRef}
+          focusable
           style={inputStyle(focusedField === "username")}
           value={username}
           onChangeText={setUsername}
@@ -76,6 +95,7 @@ export const AccountSection = forwardRef<AccountSectionRef, AccountSectionProps>
         />
         <TextInput
           ref={passwordRef}
+          focusable
           style={inputStyle(focusedField === "password")}
           value={password}
           onChangeText={setPassword}

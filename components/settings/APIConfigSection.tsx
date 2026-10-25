@@ -1,13 +1,15 @@
-import React, { useState, useRef, useImperativeHandle, forwardRef } from "react";
+import React, { useState, useRef, useImperativeHandle, forwardRef, useCallback, useEffect } from "react";
 import { View, TextInput, StyleSheet, Animated, Platform } from "react-native";
-import { useTVEventHandler } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { SettingsSection } from "./SettingsSection";
+import { useSettingsFocus } from "@/hooks/useSettingsFocus";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useRemoteControlStore } from "@/stores/remoteControlStore";
 import { useButtonAnimation } from "@/hooks/useAnimation";
 import { Colors } from "@/constants/Colors";
 import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
+
+const FOCUS_KEY = "settings.api";
 
 interface APIConfigSectionProps {
   onChanged: () => void;
@@ -15,6 +17,10 @@ interface APIConfigSectionProps {
   onBlur?: () => void;
   onPress?: () => void;
   hideDescription?: boolean;
+  /** TV 焦点链：下移目标（Android TV 用 nativeID 定位） */
+  nextFocusDown?: number;
+  /** 进入页面默认焦点 */
+  hasTVPreferredFocus?: boolean;
 }
 
 export interface APIConfigSectionRef {
@@ -22,7 +28,7 @@ export interface APIConfigSectionRef {
 }
 
 export const APIConfigSection = forwardRef<APIConfigSectionRef, APIConfigSectionProps>(
-  ({ onChanged, onFocus, onBlur, onPress, hideDescription = false }, ref) => {
+  ({ onChanged, onFocus, onBlur, onPress, hideDescription = false, nextFocusDown, hasTVPreferredFocus = false }, ref) => {
     const { apiBaseUrl, setApiBaseUrl, remoteInputEnabled } = useSettingsStore();
     const { serverUrl } = useRemoteControlStore();
     const [isInputFocused, setIsInputFocused] = useState(false);
@@ -30,6 +36,22 @@ export const APIConfigSection = forwardRef<APIConfigSectionRef, APIConfigSection
     const inputRef = useRef<TextInput>(null);
     const inputAnimationStyle = useButtonAnimation(isSectionFocused, 1.01);
     const deviceType = useResponsiveLayout().deviceType;
+    const focusRegistry = useSettingsFocus();
+
+    // 注册到设置页焦点链：遥控器上/下键由页面统一驱动，避免原生焦点搜索卡住
+    const focusSelf = useCallback(() => {
+      inputRef.current?.focus();
+    }, []);
+
+    useEffect(() => {
+      const node = {
+        key: FOCUS_KEY,
+        focus: focusSelf,
+        blur: () => inputRef.current?.blur(),
+      };
+      focusRegistry.register(node);
+      return () => focusRegistry.unregister(FOCUS_KEY);
+    }, [focusRegistry, focusSelf]);
 
     const handleUrlChange = (url: string) => {
       setApiBaseUrl(url);
@@ -53,22 +75,13 @@ export const APIConfigSection = forwardRef<APIConfigSectionRef, APIConfigSection
       onBlur?.();
     };
 
-    // TV遥控器事件处理
-    const handleTVEvent = React.useCallback(
-      (event: any) => {
-        if (isSectionFocused && event.eventType === "select") {
-          inputRef.current?.focus();
-        }
-      },
-      [isSectionFocused]
-    );
-
     const handlePress = () => {
       inputRef.current?.focus();
       onPress?.();
     }
 
-    useTVEventHandler(handleTVEvent);
+    // 遥控器 select 由 Pressable.onPress → handlePress 交给输入框聚焦；
+    // 不再用 useTVEventHandler 全局抢 select（会与焦点移动互相覆盖）。
 
     const [selection, setSelection] = useState<{ start: number; end: number }>({
       start: 0,
@@ -82,9 +95,7 @@ export const APIConfigSection = forwardRef<APIConfigSectionRef, APIConfigSection
     };
 
     return (
-      <SettingsSection focusable onFocus={handleSectionFocus} onBlur={handleSectionBlur}
-        {...Platform.isTV || deviceType !== 'tv' ? undefined : { onPress: handlePress }}
-      >
+      <SettingsSection focusable onFocus={handleSectionFocus} onBlur={handleSectionBlur}>
         <View style={styles.inputContainer}>
           <View style={styles.titleContainer}>
             <ThemedText style={styles.sectionTitle}>API 地址</ThemedText>
@@ -95,6 +106,9 @@ export const APIConfigSection = forwardRef<APIConfigSectionRef, APIConfigSection
           <Animated.View style={inputAnimationStyle}>
             <TextInput
               ref={inputRef}
+              focusable
+              hasTVPreferredFocus={hasTVPreferredFocus}
+              nextFocusDown={nextFocusDown}
               style={[styles.input, isInputFocused && styles.inputFocused]}
               value={apiBaseUrl}
               onChangeText={handleUrlChange}
@@ -104,6 +118,7 @@ export const APIConfigSection = forwardRef<APIConfigSectionRef, APIConfigSection
               autoCorrect={false}
               onFocus={() => {
                 setIsInputFocused(true);
+                handleSectionFocus();
                 // 将光标移动到文本末尾
                 const end = apiBaseUrl.length;
                 setSelection({ start: end, end: end });
@@ -117,7 +132,10 @@ export const APIConfigSection = forwardRef<APIConfigSectionRef, APIConfigSection
               selection={selection}
               onSelectionChange={onSelectionChange} // 可选
 
-              onBlur={() => setIsInputFocused(false)}
+              onBlur={() => {
+                setIsInputFocused(false);
+                handleSectionBlur();
+              }}
             />
           </Animated.View>
         </View>

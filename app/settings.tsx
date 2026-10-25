@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, StyleSheet, Alert, Platform } from "react-native";
-import { useTVEventHandler } from "react-native";
+import { View, StyleSheet, Alert, Platform, ScrollView, useTVEventHandler, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -22,6 +21,8 @@ import ResponsiveNavigation from "@/components/navigation/ResponsiveNavigation";
 import ResponsiveHeader from "@/components/navigation/ResponsiveHeader";
 import { DeviceUtils } from "@/utils/DeviceUtils";
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { SettingsFocusContext } from "@/hooks/useSettingsFocus";
+import { useSettingsFocusRegistry } from "@/hooks/useSettingsFocusRegistry";
 
 type SectionItem = {
   component: React.ReactElement;
@@ -53,12 +54,11 @@ export default function SettingsScreen() {
 
   const [hasChanges, setHasChanges] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [currentFocusIndex, setCurrentFocusIndex] = useState(0);
   const [currentSection, setCurrentSection] = useState<string | null>(null);
 
-  const saveButtonRef = useRef<any>(null);
   const apiSectionRef = useRef<any>(null);
   const liveStreamSectionRef = useRef<any>(null);
+  const saveButtonRef = useRef<any>(null);
 
   useEffect(() => {
     loadSettings();
@@ -185,7 +185,6 @@ export default function SettingsScreen() {
         <RemoteInputSection
           onChanged={markAsChanged}
           onFocus={() => {
-            setCurrentFocusIndex(0);
             setCurrentSection("remote");
           }}
         />
@@ -199,7 +198,6 @@ export default function SettingsScreen() {
           onChanged={markAsChanged}
           hideDescription={deviceType === "mobile"}
           onFocus={() => {
-            setCurrentFocusIndex(1);
             setCurrentSection("api");
           }}
         />
@@ -232,7 +230,6 @@ export default function SettingsScreen() {
           ref={liveStreamSectionRef}
           onChanged={markAsChanged}
           onFocus={() => {
-            setCurrentFocusIndex(2);
             setCurrentSection("livestream");
           }}
         />
@@ -248,26 +245,38 @@ export default function SettingsScreen() {
   const sections: SectionItem[] = rawSections.filter(isSectionItem);
 
 
-  // TV遥控器事件处理 - 仅在TV设备上启用
+  // TV 遥控器焦点：设置页控件嵌套在 ScrollView + 自定义容器里，原生焦点搜索
+  // 找不到可靠的上下相邻关系（实测卡在 API 地址输入框下不去）。
+  // 这里按注册顺序（= 视觉顺序）显式驱动 上/下 键切换。
+  const focusRegistry = useSettingsFocusRegistry();
+  const currentFocusKey = useRef<string | null>(null);
+  const [focusReady, setFocusReady] = useState(false);
+
   const handleTVEvent = React.useCallback(
     (event: any) => {
       if (deviceType !== "tv") return;
-
+      if (event.eventType !== "down" && event.eventType !== "up") return;
+      // 输入法弹出时不抢方向键
       if (event.eventType === "down") {
-        const nextIndex = Math.min(currentFocusIndex + 1, sections.length);
-        setCurrentFocusIndex(nextIndex);
-        if (nextIndex === sections.length) {
-          saveButtonRef.current?.focus();
-        }
-      } else if (event.eventType === "up") {
-        const prevIndex = Math.max(currentFocusIndex - 1, 0);
-        setCurrentFocusIndex(prevIndex);
+        focusRegistry.value.focusNext(currentFocusKey.current ?? undefined);
+      } else {
+        focusRegistry.value.focusPrev(currentFocusKey.current ?? undefined);
       }
     },
-    [currentFocusIndex, sections.length, deviceType]
+    [deviceType, focusRegistry]
   );
 
-  useTVEventHandler(deviceType === "tv" ? handleTVEvent : () => { });
+  useTVEventHandler(deviceType === "tv" ? handleTVEvent : () => {});
+
+  // 进入页面把焦点放到第一项
+  useEffect(() => {
+    if (deviceType !== "tv" || focusReady) return;
+    const timer = setTimeout(() => {
+      focusRegistry.value.focusFirst();
+      setFocusReady(true);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [deviceType, focusReady, focusRegistry]);
 
   // 动态样式
   const dynamicStyles = createResponsiveStyles(deviceType, spacing, insets);
@@ -314,13 +323,26 @@ export default function SettingsScreen() {
         </View>
 
         <View style={dynamicStyles.footer}>
-          <StyledButton
-            text={isLoading ? "保存中..." : "保存设置"}
-            onPress={handleSave}
-            variant="primary"
-            disabled={!hasChanges || isLoading}
-            style={[dynamicStyles.saveButton, (!hasChanges || isLoading) && dynamicStyles.disabledButton]}
-          />
+          <Pressable
+            ref={saveButtonRef}
+            focusable
+            onFocus={() => setCurrentSection("save")}
+            onPress={() => {
+              if (!hasChanges || isLoading) {
+                Toast.show({ type: "info", text1: "没有需要保存的修改" });
+                return;
+              }
+              handleSave();
+            }}
+            style={[(!hasChanges || isLoading) && { opacity: 0.5 }]}
+          >
+            <StyledButton
+              text={isLoading ? "保存中..." : "保存设置"}
+              onPress={() => {}}
+              variant="primary"
+              style={dynamicStyles.saveButton}
+            />
+          </Pressable>
         </View>
       </ThemedView>
     </KeyboardAwareScrollView>
@@ -329,14 +351,20 @@ export default function SettingsScreen() {
 
   // 根据设备类型决定是否包装在响应式导航中
   if (deviceType === "tv") {
-    return renderSettingsContent();
+    return (
+      <SettingsFocusContext.Provider value={focusRegistry.value}>
+        {renderSettingsContent()}
+      </SettingsFocusContext.Provider>
+    );
   }
 
   return (
-    <ResponsiveNavigation>
-      <ResponsiveHeader title="设置" showBackButton />
-      {renderSettingsContent()}
-    </ResponsiveNavigation>
+    <SettingsFocusContext.Provider value={focusRegistry.value}>
+      <ResponsiveNavigation>
+        <ResponsiveHeader title="设置" showBackButton />
+        {renderSettingsContent()}
+      </ResponsiveNavigation>
+    </SettingsFocusContext.Provider>
   );
 }
 

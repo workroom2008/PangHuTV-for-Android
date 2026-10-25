@@ -1,13 +1,15 @@
-import React, { useState, useRef, useImperativeHandle, forwardRef } from "react";
+import React, { useState, useRef, useImperativeHandle, forwardRef, useCallback, useEffect } from "react";
 import { View, TextInput, StyleSheet, Animated, Platform } from "react-native";
-import { useTVEventHandler } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { SettingsSection } from "./SettingsSection";
+import { useSettingsFocus } from "@/hooks/useSettingsFocus";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useRemoteControlStore } from "@/stores/remoteControlStore";
 import { useButtonAnimation } from "@/hooks/useAnimation";
 import { Colors } from "@/constants/Colors";
 import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
+
+const FOCUS_KEY = "settings.liveStream";
 
 interface LiveStreamSectionProps {
   onChanged: () => void;
@@ -42,6 +44,15 @@ export const LiveStreamSection = forwardRef<LiveStreamSectionRef, LiveStreamSect
       },
     }));
 
+    const focusRegistry = useSettingsFocus();
+    const focusSelf = useCallback(() => inputRef.current?.focus(), []);
+
+    // 注册到设置页焦点链
+    useEffect(() => {
+      focusRegistry.register({ key: FOCUS_KEY, focus: focusSelf });
+      return () => focusRegistry.unregister(FOCUS_KEY);
+    }, [focusRegistry, focusSelf]);
+
     const handleSectionFocus = () => {
       setIsSectionFocused(true);
       onFocus?.();
@@ -57,16 +68,7 @@ export const LiveStreamSection = forwardRef<LiveStreamSectionRef, LiveStreamSect
       onPress?.();
     }
 
-    const handleTVEvent = React.useCallback(
-      (event: any) => {
-        if (isSectionFocused && event.eventType === "select") {
-          inputRef.current?.focus();
-        }
-      },
-      [isSectionFocused]
-    );
-
-    useTVEventHandler(handleTVEvent);
+    // 遥控器 select 由 Pressable.onPress 处理；不用 useTVEventHandler 抢全局事件。
 
 
         const [selection, setSelection] = useState<{ start: number; end: number }>({
@@ -81,9 +83,7 @@ export const LiveStreamSection = forwardRef<LiveStreamSectionRef, LiveStreamSect
         };
 
     return (
-      <SettingsSection focusable onFocus={handleSectionFocus} onBlur={handleSectionBlur}
-        onPress={Platform.isTV || deviceType !== 'tv' ? undefined : handlePress}
-      >
+      <SettingsSection focusable onFocus={handleSectionFocus} onBlur={handleSectionBlur} onPress={handlePress}>
         <View style={styles.inputContainer}>
           <View style={styles.titleContainer}>
             <ThemedText style={styles.sectionTitle}>直播源地址</ThemedText>
@@ -94,6 +94,7 @@ export const LiveStreamSection = forwardRef<LiveStreamSectionRef, LiveStreamSect
           <Animated.View style={inputAnimationStyle}>
             <TextInput
               ref={inputRef}
+              focusable
               style={[styles.input, isInputFocused && styles.inputFocused]}
               value={m3uUrl}
               onChangeText={handleUrlChange}

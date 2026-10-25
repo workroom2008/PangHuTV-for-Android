@@ -1,14 +1,16 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { View, Switch, StyleSheet, Pressable, Animated, Platform, TouchableOpacity } from "react-native";
-import { useTVEventHandler } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { ThemedText } from "@/components/ThemedText";
 import { SettingsSection } from "./SettingsSection";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useRemoteControlStore } from "@/stores/remoteControlStore";
+import { useSettingsFocus } from "@/hooks/useSettingsFocus";
 import { useButtonAnimation } from "@/hooks/useAnimation";
 import { Colors } from "@/constants/Colors";
 import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
+
+const FOCUS_KEY = "settings.remoteInput";
 
 interface RemoteInputSectionProps {
   onChanged: () => void;
@@ -23,6 +25,8 @@ export const RemoteInputSection: React.FC<RemoteInputSectionProps> = ({ onChange
   const [isFocused, setIsFocused] = React.useState(false);
   const animationStyle = useButtonAnimation(isFocused, 1.2);
   const deviceType = useResponsiveLayout().deviceType;
+  const pressableRef = useRef<any>(null);
+  const focusRegistry = useSettingsFocus();
 
   const handleToggle = useCallback(
     (enabled: boolean) => {
@@ -46,39 +50,42 @@ export const RemoteInputSection: React.FC<RemoteInputSectionProps> = ({ onChange
     handleToggle(!remoteInputEnabled);
   }
 
-  // TV遥控器事件处理
-  const handleTVEvent = React.useCallback(
-    (event: any) => {
-      if (isFocused && event.eventType === "select") {
-        handleToggle(!remoteInputEnabled);
-      }
-    },
-    [isFocused, remoteInputEnabled, handleToggle]
-  );
+  const focusSelf = useCallback(() => {
+    pressableRef.current?.focus?.();
+  }, []);
 
-  useTVEventHandler(handleTVEvent);
+  // 注册到设置页焦点链（第一项）
+  useEffect(() => {
+    focusRegistry.register({ key: FOCUS_KEY, focus: focusSelf });
+    return () => focusRegistry.unregister(FOCUS_KEY);
+  }, [focusRegistry, focusSelf]);
+
+  // TV遥控器事件处理
+  // 遥控器交给原生焦点系统：方向键在可聚焦控件间移动，select 由 Pressable.onPress 处理。
+  // 这里不再用 useTVEventHandler 抢事件（会和焦点移动互相覆盖，导致设置页下移卡住）。
 
   return (
-    <SettingsSection focusable onFocus={handleSectionFocus} onBlur={handleSectionBlur}
-      {...Platform.isTV || deviceType !== 'tv' ? undefined : { onPress: handlePress }}
-    >
-      <Pressable style={styles.settingItem} onFocus={handleSectionFocus} onBlur={handleSectionBlur}>
+    <SettingsSection focusable onFocus={handleSectionFocus} onBlur={handleSectionBlur}>
+      <Pressable
+        ref={pressableRef}
+        focusable
+        style={styles.settingItem}
+        onFocus={handleSectionFocus}
+        onBlur={handleSectionBlur}
+        onPress={handlePress}
+      >
         <View style={styles.settingInfo}>
           <ThemedText style={styles.settingName}>启用远程输入</ThemedText>
         </View>
         <Animated.View style={animationStyle}>
           { Platform.OS === 'ios' && Platform.isTV ? (
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => handlePress()}
-              style={styles.statusLabel}
-            >
+            <View style={styles.statusLabel}>
               <ThemedText style={styles.statusValue}>{remoteInputEnabled ? '已启用' : '已禁用'}</ThemedText>
-            </TouchableOpacity>
+            </View>
           ) : (
             <Switch
               value={remoteInputEnabled}
-              onValueChange={() => { }} // 禁用Switch的直接交互
+              onValueChange={() => { }} // 禁用Switch的直接交互，交给外层 Pressable
               trackColor={{ false: "#767577", true: Colors.dark.primary }}
               thumbColor={remoteInputEnabled ? "#ffffff" : "#f4f3f4"}
               pointerEvents="none"
@@ -93,7 +100,10 @@ export const RemoteInputSection: React.FC<RemoteInputSectionProps> = ({ onChange
           <View style={styles.qrRow}>
             {isServerRunning && serverUrl ? (
               <View style={styles.qrBox}>
-                <QRCode value={serverUrl} size={128} color="#000000" backgroundColor="#FFFFFF" />
+                {/* BISECT-TEST: QR 暂时禁用 */}
+                {null || (
+                  <QRCode value={serverUrl} size={128} color="#000000" backgroundColor="#FFFFFF" />
+                )}
               </View>
             ) : (
               <View style={[styles.qrBox, styles.qrPlaceholder]}>
