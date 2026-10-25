@@ -41,10 +41,19 @@ export function useSettingsFocusRegistry() {
     return nodesRef.current.findIndex((n) => n.key === key);
   }, []);
 
+  /** 按稳定 key 聚焦（设置页按视觉顺序显式驱动时使用） */
+  const focusKey = useCallback((key: string) => {
+    const node = nodesRef.current.find((n) => n.key === key);
+    if (!node) return false;
+    node.focus();
+    return true;
+  }, []);
+
   const value = useMemo(
     () => ({
       register,
       unregister,
+      focusKey,
       focusNext: (currentKey?: string) => {
         const i = indexOf(currentKey);
         if (i < 0) return focusAt(0);
@@ -57,7 +66,7 @@ export function useSettingsFocusRegistry() {
       },
       focusFirst: () => focusAt(0),
     }),
-    [register, unregister, focusAt, indexOf]
+    [register, unregister, focusAt, indexOf, focusKey]
   );
 
   return { value, nodesRef };

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from "react";
-import { View, Switch, StyleSheet, Pressable, Animated, Platform, TouchableOpacity } from "react-native";
+import { View, Switch, StyleSheet, Pressable, Animated, Platform, TouchableOpacity, TVEventHandler } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { ThemedText } from "@/components/ThemedText";
 import { SettingsSection } from "./SettingsSection";
@@ -17,9 +17,17 @@ interface RemoteInputSectionProps {
   onFocus?: () => void;
   onBlur?: () => void;
   onPress?: () => void;
+  /** 把"切换开关"交给页面级 select 分发，避免各区块自己抢 TV 事件 */
+  onRegisterToggle?: (fn: () => void) => void;
 }
 
-export const RemoteInputSection: React.FC<RemoteInputSectionProps> = ({ onChanged, onFocus, onBlur, onPress }) => {
+export const RemoteInputSection: React.FC<RemoteInputSectionProps> = ({
+  onChanged,
+  onFocus,
+  onBlur,
+  onPress,
+  onRegisterToggle,
+}) => {
   const { remoteInputEnabled, setRemoteInputEnabled } = useSettingsStore();
   const { isServerRunning, serverUrl, error } = useRemoteControlStore();
   const [isFocused, setIsFocused] = React.useState(false);
@@ -46,13 +54,21 @@ export const RemoteInputSection: React.FC<RemoteInputSectionProps> = ({ onChange
     onBlur?.();
   };
 
-  const handlePress = () => {
+  const handlePress = useCallback(() => {
     handleToggle(!remoteInputEnabled);
-  }
+  }, [handleToggle, remoteInputEnabled]);
+
+  // 把切换动作登记给设置页：TV 上由页面级 select 事件统一调用
+  useEffect(() => {
+    onRegisterToggle?.(handlePress);
+  }, [onRegisterToggle, handlePress]);
 
   const focusSelf = useCallback(() => {
     pressableRef.current?.focus?.();
-  }, []);
+    // 焦点链进入本行即视为聚焦（原生 focus 事件在 OEM TV 上不一定回调）
+    setIsFocused(true);
+    onFocus?.();
+  }, [onFocus]);
 
   // 注册到设置页焦点链（第一项）
   useEffect(() => {
@@ -69,7 +85,8 @@ export const RemoteInputSection: React.FC<RemoteInputSectionProps> = ({ onChange
       <Pressable
         ref={pressableRef}
         focusable
-        style={styles.settingItem}
+        hasTVPreferredFocus={false}
+        style={[styles.settingItem, isFocused && styles.settingItemFocused]}
         onFocus={handleSectionFocus}
         onBlur={handleSectionBlur}
         onPress={handlePress}
@@ -100,10 +117,7 @@ export const RemoteInputSection: React.FC<RemoteInputSectionProps> = ({ onChange
           <View style={styles.qrRow}>
             {isServerRunning && serverUrl ? (
               <View style={styles.qrBox}>
-                {/* BISECT-TEST: QR 暂时禁用 */}
-                {null || (
-                  <QRCode value={serverUrl} size={128} color="#000000" backgroundColor="#FFFFFF" />
-                )}
+                <QRCode value={serverUrl} size={128} color="#000000" backgroundColor="#FFFFFF" />
               </View>
             ) : (
               <View style={[styles.qrBox, styles.qrPlaceholder]}>
@@ -116,7 +130,13 @@ export const RemoteInputSection: React.FC<RemoteInputSectionProps> = ({ onChange
                 手机扫码打开配置页，可填写服务器地址、用户名、密码、直播源，保存后电视立即生效
               </ThemedText>
               {serverUrl && (
-                <ThemedText style={styles.qrUrl}>{serverUrl}</ThemedText>
+                <>
+                  <ThemedText style={styles.qrUrl}>{serverUrl}</ThemedText>
+                  <ThemedText style={styles.qrTip}>
+                    手机打不开时：确认手机与电视在同一 WiFi（非访客网络、未开 AP 隔离），
+                    或手机浏览器直接输入上面这个地址。
+                  </ThemedText>
+                </>
               )}
             </View>
           </View>
@@ -146,6 +166,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  settingItemFocused: {
+    borderColor: Colors.dark.primary,
+    backgroundColor: "#007AFF22",
   },
   settingInfo: {
     flex: 1,

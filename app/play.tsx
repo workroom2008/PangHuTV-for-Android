@@ -148,6 +148,9 @@ export default function PlayScreen() {
 
     return () => {
       logger.info(`[PERF] PlayScreen unmounting - calling reset()`);
+      // 退出播放页就把 detail 标记为不可复用：卡死/闪退后再次打开同一部片时，
+      // 会重新 init 拿新直链，而不是拿上次那套已经失效的地址播放失败。
+      usePlayerStore.getState().markStale();
       reset(); // Reset state when component unmounts
     };
   }, [episodeIndex, source, position, setVideoRef, reset, loadVideo, id, title]);

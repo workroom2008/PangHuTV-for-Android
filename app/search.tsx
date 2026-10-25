@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, TextInput, StyleSheet, Alert, Keyboard, TouchableOpacity } from "react-native";
+import { View, TextInput, StyleSheet, Alert, Keyboard, TouchableOpacity, FlatList } from "react-native";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import VideoCard from "@/components/VideoCard";
 import VideoLoadingAnimation from "@/components/VideoLoadingAnimation";
-import { api, SearchResult } from "@/services/api";
+import { api, SearchResult, SearchSourceTab } from "@/services/api";
 import { Search, QrCode } from "lucide-react-native";
 import { StyledButton } from "@/components/StyledButton";
 import { useRemoteControlStore } from "@/stores/remoteControlStore";
@@ -39,7 +39,7 @@ export default function SearchScreen() {
   const { deviceType, spacing } = responsiveConfig;
 
   useEffect(() => {
-    if (lastMessage && targetPage === 'search') {
+    if (lastMessage && (targetPage === 'search' || !targetPage)) {
       logger.debug("Received remote input:", lastMessage);
       const realMessage = lastMessage.split("_")[0];
       setKeyword(realMessage);
@@ -57,6 +57,49 @@ export default function SearchScreen() {
   //   return () => clearTimeout(timer);
   // }, []);
 
+  // 源选择：直接来自 /api/searchFilm 的 sources 字段（带各源命中数），无需额外请求
+  const [sourceTabs, setSourceTabs] = useState<SearchSourceTab[]>([]);
+  const [selectedSource, setSelectedSource] = useState("");
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+
+  const PAGE_SIZE = 50; // 服务端硬上限，见 index_handler.go
+
+  const runSearch = async (
+    term: string,
+    sourceKey: string,
+    pageNo: number,
+    mode: "replace" | "append"
+  ) => {
+    try {
+      const res = sourceKey
+        ? await api.searchBySource(term, sourceKey, pageNo, PAGE_SIZE)
+        : await api.searchByKeyword(term, pageNo, PAGE_SIZE);
+
+      if (res.sources?.length) setSourceTabs(res.sources);
+      setTotal(res.total ?? 0);
+      setHasMore(!!res.hasMore);
+
+      setResults((prev) => {
+        if (mode === "replace") return res.list;
+        const seen = new Set(prev.map((r) => `${r.source}_${r.id}`));
+        return [...prev, ...res.list.filter((r) => !seen.has(`${r.source}_${r.id}`))];
+      });
+
+      if (mode === "replace" && res.list.length === 0) {
+        setError("没有找到相关内容");
+      } else {
+        setError(null);
+      }
+    } catch (err) {
+      logger.info("Search failed:", err);
+      setError("搜索失败，请稍后重试。");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSearch = async (searchText?: string) => {
     const term = typeof searchText === "string" ? searchText : keyword;
     if (!term.trim()) {
@@ -66,19 +109,31 @@ export default function SearchScreen() {
     Keyboard.dismiss();
     setLoading(true);
     setError(null);
-    try {
-      const results = await api.searchByKeyword(term);
-      if (results.length > 0) {
-        setResults(results);
-      } else {
-        setError("没有找到相关内容");
-      }
-    } catch (err) {
-      setError("搜索失败，请稍后重试。");
-      logger.info("Search failed:", err);
-    } finally {
-      setLoading(false);
-    }
+    setPage(1);
+    await runSearch(term, selectedSource, 1, "replace");
+  };
+
+  // 选源：已有结果就立刻按新源重搜，不用再按一次搜索
+  const handleSelectSource = async (sourceKey: string) => {
+    if (sourceKey === selectedSource) return;
+    setSelectedSource(sourceKey);
+    const term = keyword.trim();
+    if (!term) return;
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    await runSearch(term, sourceKey, 1, "replace");
+  };
+
+  // 加载更多（聚合搜索分页累加）
+  const handleLoadMore = async () => {
+    if (loading || !hasMore) return;
+    const term = keyword.trim();
+    if (!term) return;
+    setLoading(true);
+    const next = page + 1;
+    setPage(next);
+    await runSearch(term, selectedSource, next, "append");
   };
 
   const onSearchPress = () => handleSearch();
@@ -162,7 +217,32 @@ export default function SearchScreen() {
         )}
       </View>
 
-      {hotKeywords.length > 0 && (
+      {/* 源选择：标签与命中数都来自搜索响应，选完立即按该源重搜 */}
+      {sourceTabs.length > 1 && deviceType !== 'mobile' && (
+        <FlatList
+          data={sourceTabs}
+          renderItem={({ item }) => {
+            const isSelected = selectedSource === item.id;
+            return (
+              <StyledButton
+                text={item.count > 0 ? `${item.name}(${item.count})` : item.name}
+                onPress={() => handleSelectSource(item.id)}
+                isSelected={isSelected}
+                style={dynamicStyles.sourceButton}
+                textStyle={dynamicStyles.sourceText}
+                variant={isSelected ? "primary" : "ghost"}
+              />
+            );
+          }}
+          keyExtractor={(item) => item.id || "__all__"}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={dynamicStyles.sourceListContent}
+        />
+      )}
+
+      {/* 热词只在"还没有结果"的空态显示：出结果后如果还挂着，会一直挤压网格可视区 */}
+      {hotKeywords.length > 0 && results.length === 0 && !loading && (
         <View style={dynamicStyles.hotKeywordsRow}>
           {hotKeywords.map((word) => (
             <TouchableOpacity
@@ -183,13 +263,30 @@ export default function SearchScreen() {
           <ThemedText style={dynamicStyles.errorText}>{error}</ThemedText>
         </View>
       ) : (
-        <CustomScrollView
-          data={results}
-          renderItem={renderItem}
-          loading={loading}
-          error={error}
-          emptyMessage="输入关键词开始搜索"
-        />
+        <>
+          {results.length > 0 && (
+            <View style={dynamicStyles.resultHeader}>
+              <ThemedText style={dynamicStyles.resultCount}>
+                {total > results.length ? `已显示 ${results.length} / 共 ${total} 条` : `共 ${results.length} 条`}
+              </ThemedText>
+              {hasMore && (
+                <StyledButton
+                  text="加载更多"
+                  onPress={handleLoadMore}
+                  variant="ghost"
+                  style={dynamicStyles.loadMoreButton}
+                />
+              )}
+            </View>
+          )}
+          <CustomScrollView
+            data={results}
+            renderItem={renderItem}
+            loading={loading}
+            error={error}
+            emptyMessage="输入关键词开始搜索"
+          />
+        </>
       )}
       <RemoteControlModal />
     </>
@@ -229,6 +326,34 @@ const createResponsiveStyles = (deviceType: string, spacing: number) => {
       marginBottom: spacing,
       alignItems: "center",
       paddingTop: isMobile ? spacing / 2 : 0,
+    },
+    sourceListContent: {
+      paddingHorizontal: spacing,
+      paddingBottom: spacing / 2,
+    },
+    sourceButton: {
+      marginRight: spacing / 2,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 18,
+    },
+    sourceText: {
+      fontSize: isMobile ? 13 : 15,
+    },
+    resultHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing,
+      marginBottom: 8,
+    },
+    resultCount: {
+      fontSize: 13,
+      color: "#999",
+    },
+    loadMoreButton: {
+      paddingHorizontal: 16,
+      paddingVertical: 6,
     },
     inputContainer: {
       flex: 1,

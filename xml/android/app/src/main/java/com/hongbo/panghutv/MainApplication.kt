@@ -23,7 +23,10 @@ class MainApplication : Application(), ReactApplication {
           override fun getPackages(): List<ReactPackage> {
             // Packages that cannot be autolinked yet can be added manually here, for example:
             // packages.add(new MyReactNativePackage());
-            return PackageList(this).packages
+            val packages = PackageList(this).packages.toMutableList()
+            // 远程输入服务：原生 HTTP server（绕开 react-native-tcp-socket 在 OEM TV 上的读线程卡死）
+            packages.add(RemoteInputPackage())
+            return packages
           }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"

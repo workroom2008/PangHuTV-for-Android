@@ -37,8 +37,12 @@ export const useRemoteControlStore = create<RemoteControlState>((set, get) => ({
       onMessage: (message: string) => {
         logger.debug('Received message:', message);
         const currentState = get();
-        // Use the current targetPage from the store
-        set({ lastMessage: message, targetPage: currentState.targetPage });
+        // 手机端「发送文本」固定给搜索页用；targetPage 为空时默认 search，
+        // 否则搜索页判断 targetPage === 'search' 永远不成立，文本收不到。
+        set({
+          lastMessage: `${message}_${Date.now()}`,
+          targetPage: currentState.targetPage ?? 'search',
+        });
       },
       onHandshake: () => {
         logger.debug('Handshake successful');
@@ -80,7 +84,7 @@ export const useRemoteControlStore = create<RemoteControlState>((set, get) => ({
     } catch (e) {
       // 展示真实失败原因（IP 未就绪/端口占用等），不再笼统提示
       const reason = e instanceof Error ? e.message : String(e);
-      const errorMessage = `启动失败：${reason}`;
+      const errorMessage = `启动失败：${reason}（电视请连网线或同一 WiFi 后重试；仍失败可到电视系统设置查看本机 IP，手机浏览器访问 http://电视IP:12346）`;
       logger.error('Failed to start server:', errorMessage);
       set({ error: errorMessage });
     }

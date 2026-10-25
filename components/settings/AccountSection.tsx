@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from "react";
-import { TextInput, StyleSheet } from "react-native";
+import { TextInput, StyleSheet, Pressable, View } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { LoginCredentialsManager } from "@/services/storage";
 import { useSettingsFocus } from "@/hooks/useSettingsFocus";
+import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
 import { Colors } from "@/constants/Colors";
 
 const FOCUS_KEY_USERNAME = "settings.account.username";
@@ -23,12 +24,23 @@ interface AccountSectionProps {
   onBlur?: () => void;
 }
 
-/** 设置页账号区：API 地址下方配置用户名/密码，保存即登录；支持远程输入填充 */
+/**
+ * 设置页账号区。
+ *
+ * TV 上用户名/密码不直接参与遥控器焦点（TextInput 抢焦点会挂输入法，
+ * 方向键被 IME 吃掉）。改为 Pressable 行承载焦点，按 OK 才进入编辑。
+ */
 export const AccountSection = forwardRef<AccountSectionRef, AccountSectionProps>(
   ({ username, password, setUsername, setPassword, onFocus, onBlur }, ref) => {
     const usernameRef = useRef<TextInput>(null);
     const passwordRef = useRef<TextInput>(null);
+    const usernameRowRef = useRef<any>(null);
+    const passwordRowRef = useRef<any>(null);
     const [focusedField, setFocusedField] = useState<"username" | "password" | null>(null);
+    const [editing, setEditing] = useState<"username" | "password" | null>(null);
+    const deviceType = useResponsiveLayout().deviceType;
+    const isTV = deviceType === "tv";
+    const focusRegistry = useSettingsFocus();
 
     // 首次挂载用已存凭据回填（父级 state 为空时）
     const filledRef = useRef(false);
@@ -52,11 +64,10 @@ export const AccountSection = forwardRef<AccountSectionRef, AccountSectionProps>
       setPasswordValue: setPassword,
     }));
 
-    const focusRegistry = useSettingsFocus();
-    const focusUsername = useCallback(() => usernameRef.current?.focus(), []);
-    const focusPassword = useCallback(() => passwordRef.current?.focus(), []);
+    const focusUsername = useCallback(() => usernameRowRef.current?.focus?.(), []);
+    const focusPassword = useCallback(() => passwordRowRef.current?.focus?.(), []);
 
-    // 注册到设置页焦点链（用户名 → 密码，按视觉顺序）
+    // 注册到设置页焦点链（用户名 → 密码）
     useEffect(() => {
       focusRegistry.register({ key: FOCUS_KEY_USERNAME, focus: focusUsername });
       focusRegistry.register({ key: FOCUS_KEY_PASSWORD, focus: focusPassword });
@@ -66,7 +77,21 @@ export const AccountSection = forwardRef<AccountSectionRef, AccountSectionProps>
       };
     }, [focusRegistry, focusUsername, focusPassword]);
 
-    const inputStyle = (focused: boolean) => [styles.input, focused && styles.inputFocused];
+    const startEdit = (field: "username" | "password") => {
+      setEditing(field);
+      setTimeout(() => {
+        (field === "username" ? usernameRef : passwordRef).current?.focus();
+      }, 60);
+    };
+
+    const endEdit = (field: "username" | "password") => {
+      setEditing(null);
+      setTimeout(() => {
+        (field === "username" ? usernameRowRef : passwordRowRef).current?.focus?.();
+      }, 60);
+    };
+
+    const rowStyles = (focused: boolean) => [styles.input, styles.rowPressable, focused && styles.inputFocused];
 
     return (
       <ThemedView style={styles.section}>
@@ -74,45 +99,105 @@ export const AccountSection = forwardRef<AccountSectionRef, AccountSectionProps>
         <ThemedText style={styles.subtitle}>
           配合上方 API 地址使用，保存后自动登录（可用手机远程输入填充）
         </ThemedText>
-        <TextInput
-          ref={usernameRef}
-          focusable
-          style={inputStyle(focusedField === "username")}
-          value={username}
-          onChangeText={setUsername}
-          placeholder="用户名"
-          placeholderTextColor="#888"
-          autoCapitalize="none"
-          autoCorrect={false}
-          onFocus={() => {
-            setFocusedField("username");
-            onFocus?.();
-          }}
-          onBlur={() => {
-            setFocusedField(null);
-            onBlur?.();
-          }}
-        />
-        <TextInput
-          ref={passwordRef}
-          focusable
-          style={inputStyle(focusedField === "password")}
-          value={password}
-          onChangeText={setPassword}
-          placeholder="密码"
-          placeholderTextColor="#888"
-          secureTextEntry
-          autoCapitalize="none"
-          autoCorrect={false}
-          onFocus={() => {
-            setFocusedField("password");
-            onFocus?.();
-          }}
-          onBlur={() => {
-            setFocusedField(null);
-            onBlur?.();
-          }}
-        />
+
+        {isTV ? (
+          <>
+            <Pressable
+              ref={usernameRowRef}
+              focusable
+              style={rowStyles(focusedField === "username")}
+              onFocus={() => { setFocusedField("username"); onFocus?.(); }}
+              onBlur={() => { setFocusedField(null); onBlur?.(); }}
+              onPress={() => startEdit("username")}
+            >
+              {editing === "username" ? (
+                <TextInput
+                  ref={usernameRef}
+                  focusable={false}
+                  autoFocus
+                  style={styles.inlineInput}
+                  value={username}
+                  onChangeText={setUsername}
+                  placeholder="用户名"
+                  placeholderTextColor="#888"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onBlur={() => endEdit("username")}
+                  onSubmitEditing={() => endEdit("username")}
+                />
+              ) : (
+                <View style={styles.rowInner}>
+                  <ThemedText style={styles.rowLabel}>用户名</ThemedText>
+                  <ThemedText style={styles.rowValue} numberOfLines={1}>
+                    {username || "未设置"}
+                  </ThemedText>
+                </View>
+              )}
+            </Pressable>
+
+            <Pressable
+              ref={passwordRowRef}
+              focusable
+              style={rowStyles(focusedField === "password")}
+              onFocus={() => { setFocusedField("password"); onFocus?.(); }}
+              onBlur={() => { setFocusedField(null); onBlur?.(); }}
+              onPress={() => startEdit("password")}
+            >
+              {editing === "password" ? (
+                <TextInput
+                  ref={passwordRef}
+                  focusable={false}
+                  autoFocus
+                  style={styles.inlineInput}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="密码"
+                  placeholderTextColor="#888"
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onBlur={() => endEdit("password")}
+                  onSubmitEditing={() => endEdit("password")}
+                />
+              ) : (
+                <View style={styles.rowInner}>
+                  <ThemedText style={styles.rowLabel}>密码</ThemedText>
+                  <ThemedText style={styles.rowValue} numberOfLines={1}>
+                    {password ? "••••••••" : "未设置"}
+                  </ThemedText>
+                </View>
+              )}
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <TextInput
+              ref={usernameRef}
+              style={styles.input}
+              value={username}
+              onChangeText={setUsername}
+              placeholder="用户名"
+              placeholderTextColor="#888"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onFocus={() => { setFocusedField("username"); onFocus?.(); }}
+              onBlur={() => { setFocusedField(null); onBlur?.(); }}
+            />
+            <TextInput
+              ref={passwordRef}
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="密码"
+              placeholderTextColor="#888"
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              onFocus={() => { setFocusedField("password"); onFocus?.(); }}
+              onBlur={() => { setFocusedField(null); onBlur?.(); }}
+            />
+          </>
+        )}
       </ThemedView>
     );
   }
@@ -150,6 +235,30 @@ const styles = StyleSheet.create({
     color: "white",
     borderColor: "transparent",
     marginBottom: 12,
+  },
+  rowPressable: {
+    justifyContent: "center",
+  },
+  rowInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  rowLabel: {
+    fontSize: 14,
+    color: "#999",
+  },
+  rowValue: {
+    fontSize: 16,
+    color: "white",
+    flexShrink: 1,
+    marginLeft: 12,
+  },
+  inlineInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "white",
+    padding: 0,
   },
   inputFocused: {
     borderColor: Colors.dark.primary,

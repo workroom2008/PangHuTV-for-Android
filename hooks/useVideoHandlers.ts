@@ -1,4 +1,4 @@
-import { useCallback, RefObject, useMemo } from 'react';
+import { useCallback, RefObject, useMemo, useRef } from 'react';
 import { Video, ResizeMode } from 'expo-av';
 import Toast from 'react-native-toast-message';
 import usePlayerStore from '@/stores/playerStore';
@@ -100,11 +100,15 @@ export const useVideoHandlers = ({
   }, [currentEpisode?.url]);
 
   // 优化的Video组件props
+  // 注意：不要把 playbackRate 放进 props.rate。
+  // rate 变化会重建 source，老 TV 上等于重开 OMX 解码器，
+  // 与 seek 叠加时很容易直接把进程带崩。变速统一走 setRateAsync。
+  const initialRateRef = useRef(playbackRate);
   const videoProps = useMemo(() => ({
     source: { uri: currentEpisode?.url || '' },
     posterSource: { uri: detail?.poster ?? "" },
     resizeMode: ResizeMode.CONTAIN,
-    rate: playbackRate,
+    rate: initialRateRef.current,
     onPlaybackStatusUpdate: handlePlaybackStatusUpdate,
     onLoad,
     onLoadStart,
@@ -114,7 +118,6 @@ export const useVideoHandlers = ({
   }), [
     currentEpisode?.url,
     detail?.poster,
-    playbackRate,
     handlePlaybackStatusUpdate,
     onLoad,
     onLoadStart,

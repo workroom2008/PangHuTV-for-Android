@@ -81,13 +81,14 @@ describe("胖虎接口映射", () => {
       expect(toPlaybackUrl("/v/1.mp4", "http://s")).toBe("http://s/v/1.mp4");
     });
 
-    it("/api/hls 改写为 /api/hls.m3u8", () => {
+    it("/api/hls 改写为 /api/hls.m3u8（手机尺寸不追加 client=tv）", () => {
+      // jest 默认窗口 750x1334（竖屏手机）：短边 <1024，不是 TV
       expect(toPlaybackUrl("/api/hls?url=a.m3u8&source=src1", "http://s")).toBe(
         "http://s/api/hls.m3u8?url=a.m3u8&source=src1"
       );
     });
 
-    it("私有化时 hls 追加 token", async () => {
+    it("私有化时 hls 追加 token（手机尺寸不追加 client=tv）", async () => {
       await setAuthToken("jwt-t");
       setPrivateAccess(true);
       expect(toPlaybackUrl("/api/hls?url=a.m3u8&source=src1", "http://s")).toBe(
@@ -95,12 +96,30 @@ describe("胖虎接口映射", () => {
       );
     });
 
-    it("私有化时绝对地址 hls 也改写并追加 token", async () => {
+    it("私有化时绝对地址 hls 也改写并追加 token（手机尺寸不追加 client=tv）", async () => {
       await setAuthToken("jwt-t");
       setPrivateAccess(true);
       expect(toPlaybackUrl("http://s/api/hls?url=a.m3u8&source=src1", "http://s")).toBe(
         "http://s/api/hls.m3u8?url=a.m3u8&source=src1&token=jwt-t"
       );
+    });
+
+    describe("TV 尺寸（短边 >=1024）追加 client=tv", () => {
+      const { Dimensions } = require("react-native");
+      const original = Dimensions.get;
+      beforeEach(() => {
+        // TV 一定是横屏大屏：1920x1080，短边 1080
+        (Dimensions as any).get = () => ({ width: 1920, height: 1080, scale: 1, fontScale: 1 });
+      });
+      afterEach(() => {
+        (Dimensions as any).get = original;
+      });
+
+      it("改写为 /api/hls.m3u8 并带 client=tv", () => {
+        expect(toPlaybackUrl("/api/hls?url=a.m3u8&source=src1", "http://s")).toBe(
+          "http://s/api/hls.m3u8?url=a.m3u8&source=src1&client=tv"
+        );
+      });
     });
   });
 
@@ -118,9 +137,9 @@ describe("胖虎接口映射", () => {
         })
       );
 
-      const results = await api.searchByKeyword("庆余年");
-      expect(results).toHaveLength(1);
-      const r = results[0];
+      const page = await api.searchByKeyword("庆余年");
+      expect(page.list).toHaveLength(1);
+      const r = page.list[0];
       expect(r.id).toBe("101");
       expect(r.title).toBe("庆余年");
       expect(r.source).toBe("src1");

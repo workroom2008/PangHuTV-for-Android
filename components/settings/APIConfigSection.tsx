@@ -1,5 +1,5 @@
 import React, { useState, useRef, useImperativeHandle, forwardRef, useCallback, useEffect } from "react";
-import { View, TextInput, StyleSheet, Animated, Platform } from "react-native";
+import { View, TextInput, StyleSheet, Animated, Pressable } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { SettingsSection } from "./SettingsSection";
 import { useSettingsFocus } from "@/hooks/useSettingsFocus";
@@ -17,41 +17,34 @@ interface APIConfigSectionProps {
   onBlur?: () => void;
   onPress?: () => void;
   hideDescription?: boolean;
-  /** TV 焦点链：下移目标（Android TV 用 nativeID 定位） */
-  nextFocusDown?: number;
-  /** 进入页面默认焦点 */
-  hasTVPreferredFocus?: boolean;
 }
 
 export interface APIConfigSectionRef {
   setInputValue: (value: string) => void;
 }
 
+/**
+ * API 地址区块。
+ *
+ * TV 关键点：**输入框不直接参与遥控器焦点**。
+ * 老 OEM Android TV 上 TextInput 一旦获得焦点就会挂输入法，
+ * 方向键被 PinyinIME 吃掉，导致整页"遥控器不能下移、鼠标却能用"。
+ *
+ * 做法：用一个 Pressable 行承载焦点（可上下移动），按 OK 才把真实输入框
+ * 临时聚焦（setEditable + focus）唤起软键盘/远程输入；失焦后收起。
+ */
 export const APIConfigSection = forwardRef<APIConfigSectionRef, APIConfigSectionProps>(
-  ({ onChanged, onFocus, onBlur, onPress, hideDescription = false, nextFocusDown, hasTVPreferredFocus = false }, ref) => {
+  ({ onChanged, onFocus, onBlur, onPress, hideDescription = false }, ref) => {
     const { apiBaseUrl, setApiBaseUrl, remoteInputEnabled } = useSettingsStore();
     const { serverUrl } = useRemoteControlStore();
-    const [isInputFocused, setIsInputFocused] = useState(false);
-    const [isSectionFocused, setIsSectionFocused] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [isRowFocused, setIsRowFocused] = useState(false);
     const inputRef = useRef<TextInput>(null);
-    const inputAnimationStyle = useButtonAnimation(isSectionFocused, 1.01);
+    const rowRef = useRef<any>(null);
+    const rowAnimationStyle = useButtonAnimation(isRowFocused || isEditing, 1.01);
     const deviceType = useResponsiveLayout().deviceType;
+    const isTV = deviceType === "tv";
     const focusRegistry = useSettingsFocus();
-
-    // 注册到设置页焦点链：遥控器上/下键由页面统一驱动，避免原生焦点搜索卡住
-    const focusSelf = useCallback(() => {
-      inputRef.current?.focus();
-    }, []);
-
-    useEffect(() => {
-      const node = {
-        key: FOCUS_KEY,
-        focus: focusSelf,
-        blur: () => inputRef.current?.blur(),
-      };
-      focusRegistry.register(node);
-      return () => focusRegistry.unregister(FOCUS_KEY);
-    }, [focusRegistry, focusSelf]);
 
     const handleUrlChange = (url: string) => {
       setApiBaseUrl(url);
@@ -65,37 +58,43 @@ export const APIConfigSection = forwardRef<APIConfigSectionRef, APIConfigSection
       },
     }));
 
-    const handleSectionFocus = () => {
-      setIsSectionFocused(true);
+    const handleRowFocus = useCallback(() => {
+      setIsRowFocused(true);
       onFocus?.();
-    };
+    }, [onFocus]);
 
-    const handleSectionBlur = () => {
-      setIsSectionFocused(false);
+    const handleRowBlur = useCallback(() => {
+      setIsRowFocused(false);
       onBlur?.();
-    };
+    }, [onBlur]);
 
-    const handlePress = () => {
-      inputRef.current?.focus();
+    /** 按 OK：进入编辑态并聚焦输入框 */
+    const handleRowPress = useCallback(() => {
+      setIsEditing(true);
       onPress?.();
-    }
+      setTimeout(() => inputRef.current?.focus(), 60);
+    }, [onPress]);
 
-    // 遥控器 select 由 Pressable.onPress → handlePress 交给输入框聚焦；
-    // 不再用 useTVEventHandler 全局抢 select（会与焦点移动互相覆盖）。
+    /** 编辑结束（失焦或按下返回）：退出编辑态，焦点还给行 */
+    const exitEditing = useCallback(() => {
+      setIsEditing(false);
+      setTimeout(() => rowRef.current?.focus?.(), 60);
+    }, []);
 
-    const [selection, setSelection] = useState<{ start: number; end: number }>({
-      start: 0,
-      end: 0,
-    });
-    // 当用户手动移动光标或选中文本时，同步到 state（可选）
-    const onSelectionChange = ({
-      nativeEvent: { selection },
-    }: any) => {
-      setSelection(selection);
-    };
+    // 注册到设置页焦点链
+    const focusSelf = useCallback(() => {
+      rowRef.current?.focus?.();
+    }, []);
+
+    useEffect(() => {
+      focusRegistry.register({ key: FOCUS_KEY, focus: focusSelf });
+      return () => focusRegistry.unregister(FOCUS_KEY);
+    }, [focusRegistry, focusSelf]);
+
+    const displayValue = apiBaseUrl || "未设置";
 
     return (
-      <SettingsSection focusable onFocus={handleSectionFocus} onBlur={handleSectionBlur}>
+      <SettingsSection focusable onFocus={handleRowFocus} onBlur={handleRowBlur}>
         <View style={styles.inputContainer}>
           <View style={styles.titleContainer}>
             <ThemedText style={styles.sectionTitle}>API 地址</ThemedText>
@@ -103,40 +102,56 @@ export const APIConfigSection = forwardRef<APIConfigSectionRef, APIConfigSection
               <ThemedText style={styles.subtitle}>用手机访问 {serverUrl}，可远程输入</ThemedText>
             )}
           </View>
-          <Animated.View style={inputAnimationStyle}>
-            <TextInput
-              ref={inputRef}
-              focusable
-              hasTVPreferredFocus={hasTVPreferredFocus}
-              nextFocusDown={nextFocusDown}
-              style={[styles.input, isInputFocused && styles.inputFocused]}
-              value={apiBaseUrl}
-              onChangeText={handleUrlChange}
-              placeholder="输入服务器地址"
-              placeholderTextColor="#888"
-              autoCapitalize="none"
-              autoCorrect={false}
-              onFocus={() => {
-                setIsInputFocused(true);
-                handleSectionFocus();
-                // 将光标移动到文本末尾
-                const end = apiBaseUrl.length;
-                setSelection({ start: end, end: end });
-                // 有时需要延迟一下，让系统先完成 focus 再设置 selection
-                //（在 Android 上更可靠）
-                setTimeout(() => {
-                  // 对于受控的 selection 已经生效，这里仅作保险
-                  inputRef.current?.setNativeProps({ selection: { start: end, end: end } });
-                }, 0);
-              }}
-              selection={selection}
-              onSelectionChange={onSelectionChange} // 可选
 
-              onBlur={() => {
-                setIsInputFocused(false);
-                handleSectionBlur();
-              }}
-            />
+          <Animated.View style={rowAnimationStyle}>
+            {isTV ? (
+              <Pressable
+                ref={rowRef}
+                focusable
+                style={[
+                  styles.input,
+                  styles.rowPressable,
+                  (isRowFocused || isEditing) && styles.inputFocused,
+                ]}
+                onFocus={handleRowFocus}
+                onBlur={handleRowBlur}
+                onPress={handleRowPress}
+              >
+                {isEditing ? (
+                  <TextInput
+                    ref={inputRef}
+                    focusable={false}
+                    style={styles.inlineInput}
+                    value={apiBaseUrl}
+                    onChangeText={handleUrlChange}
+                    placeholder="输入服务器地址"
+                    placeholderTextColor="#888"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoFocus
+                    onBlur={exitEditing}
+                    onSubmitEditing={exitEditing}
+                  />
+                ) : (
+                  <ThemedText style={styles.rowValue} numberOfLines={1}>
+                    {displayValue}
+                  </ThemedText>
+                )}
+              </Pressable>
+            ) : (
+              <TextInput
+                ref={inputRef}
+                style={[styles.input, isRowFocused && styles.inputFocused]}
+                value={apiBaseUrl}
+                onChangeText={handleUrlChange}
+                placeholder="输入服务器地址"
+                placeholderTextColor="#888"
+                autoCapitalize="none"
+                autoCorrect={false}
+                onFocus={handleRowFocus}
+                onBlur={handleRowBlur}
+              />
+            )}
           </Animated.View>
         </View>
       </SettingsSection>
@@ -179,6 +194,19 @@ const styles = StyleSheet.create({
     backgroundColor: "#3a3a3c",
     color: "white",
     borderColor: "transparent",
+  },
+  rowPressable: {
+    justifyContent: "center",
+  },
+  rowValue: {
+    fontSize: 16,
+    color: "white",
+  },
+  inlineInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "white",
+    padding: 0,
   },
   inputFocused: {
     borderColor: Colors.dark.primary,

@@ -2,7 +2,9 @@ node_modules/
 .expo/
 dist/
 ios/
-android/
+# 只忽略 expo prebuild 生成的根 android/；
+# xml/android/ 是手动维护的 TV 覆盖源码（RemoteInputServer 等），必须入库。
+/android/
 npm-debug.*
 *.jks
 *.p8

@@ -1,10 +1,14 @@
 import TcpSocket from 'react-native-tcp-socket';
 import NetInfo from '@react-native-community/netinfo';
+import { NativeModules, Platform } from 'react-native';
 import Logger from '@/utils/Logger';
 
 const logger = Logger.withTag('TCPHttpServer');
 
 const PORT = 12346;
+
+/** 原生远程输入服务（Android，RemoteInputModule） */
+const NativeRemoteInput: any = (NativeModules as any)?.RemoteInput ?? null;
 
 interface HttpRequest {
   method: string;
@@ -25,6 +29,7 @@ class TCPHttpServer {
   private server: TcpSocket.Server | null = null;
   private isRunning = false;
   private requestHandler: RequestHandler | null = null;
+  private nativeUrl: string | null = null;
 
   constructor() {
     this.server = null;
@@ -104,20 +109,78 @@ class TCPHttpServer {
     this.requestHandler = handler;
   }
 
-  public async start(): Promise<string> {
-    // 冷启动时网络栈可能未就绪，NetInfo 拿不到 IP：重试几次
-    let ipAddress: string | null = null;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const netState = await NetInfo.fetch();
-      if (netState.type === 'wifi' || netState.type === 'ethernet') {
-        ipAddress = (netState.details as any)?.ipAddress ?? null;
+  private isPrivateIPv4(ip: string): boolean {
+    const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(String(ip).trim());
+    if (!m) return false;
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    if (a === 0 || a === 127 || a >= 224) return false;
+    if (a === 10) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    // 部分路由器给 26.x / 100.64 这类运营商段，也允许（只要不是公网常规段）
+    return false;
+  }
+
+  private ipPriority(ip: string): number {
+    if (ip.startsWith('192.168.')) return 0;
+    if (ip.startsWith('10.')) return 1;
+    if (ip.startsWith('172.')) return 2;
+    return 3;
+  }
+
+  /**
+   * 多手段解析局域网 IPv4。
+   *
+   * 原实现只读 NetInfo.details.ipAddress，电视走以太网、或 details 里只有
+   * ipv4/ipAddresses、或接口名非 wlan0 时拿到 null/错值，直接把
+   * http://null:12346（或不可达 IP）放进二维码，手机扫码必然打不开。
+   */
+  private async resolveLanIp(): Promise<string | null> {
+    const candidates: string[] = [];
+
+    const collect = (v: unknown) => {
+      if (typeof v === 'string' && this.isPrivateIPv4(v)) candidates.push(v.trim());
+    };
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        const netState = await NetInfo.fetch();
+        const d: any = netState.details ?? {};
+        collect(d.ipAddress);
+        collect(d.ipv4);
+        if (Array.isArray(d.ipAddresses)) d.ipAddresses.forEach(collect);
+        if (Array.isArray(d.details)) d.details.forEach((x: any) => collect(x?.ipAddress));
+        collect(d?.subnet && d?.ipAddress);
+      } catch (e) {
+        logger.info('[TCPHttpServer] NetInfo.fetch failed:', e);
       }
-      if (ipAddress) break;
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (candidates.length) break;
+      await new Promise((r) => setTimeout(r, 1000));
     }
 
+    const uniq = Array.from(new Set(candidates));
+    if (uniq.length === 0) return null;
+    uniq.sort((a, b) => this.ipPriority(a) - this.ipPriority(b));
+    logger.debug('[TCPHttpServer] resolved LAN IP candidates:', uniq, '->', uniq[0]);
+    return uniq[0];
+  }
+
+  public async start(): Promise<string> {
+    // Android：走原生 HTTP server。
+    // react-native-tcp-socket 在 OEM Android 6 TV 上 accept 后读线程卡死
+    // （连接 ESTABLISHED 但服务端零响应，手机/浏览器永远打不开），原生实现绕开该缺陷。
+    if (Platform.OS === 'android' && NativeRemoteInput) {
+      const url = await this.startNative();
+      this.isRunning = true;
+      return url;
+    }
+
+    // 冷启动时网络栈可能未就绪，NetInfo 拿不到 IP：多手段探测并重试
+    const ipAddress = await this.resolveLanIp();
+
     if (!ipAddress) {
-      throw new Error('无法获取IP地址，请确认设备已连接到WiFi或以太网。');
+      throw new Error('无法获取局域网 IP，请确认电视已连 WiFi 或网线；可在电视系统设置里查看本机 IP。');
     }
 
     if (this.isRunning) {
@@ -237,7 +300,38 @@ class TCPHttpServer {
     });
   }
 
+  /**
+   * Android 原生 HTTP server。
+   * JS 只负责：把当前配置渲染成页面 HTML 塞给原生，以及接收原生转发来的 POST 事件。
+   */
+  private async startNative(): Promise<string> {
+    const res = await NativeRemoteInput.start();
+    const url: string = res?.url ?? `http://127.0.0.1:${PORT}`;
+    this.nativeUrl = url;
+
+    // 页面 HTML 由 service 层提供（remoteControlService 注册 handler 后才有内容）
+    if (this.requestHandler) {
+      const page = await this.requestHandler({
+        method: 'GET',
+        url: '/',
+        headers: {},
+        body: '',
+      });
+      NativeRemoteInput.setPage?.(page?.body ?? '');
+    }
+
+    this.isRunning = true;
+    logger.debug('[TCPHttpServer] Native server listening at', url);
+    return url;
+  }
+
   public stop() {
+    if (Platform.OS === 'android' && NativeRemoteInput && this.isRunning) {
+      NativeRemoteInput.stop?.().catch?.(() => {});
+      this.isRunning = false;
+      logger.debug('[TCPHttpServer] Native server stopped');
+      return;
+    }
     if (this.server && this.isRunning) {
       this.server.close();
       this.server = null;

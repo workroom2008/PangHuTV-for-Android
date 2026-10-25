@@ -41,6 +41,8 @@ interface PlayerState {
   }) => Promise<void>;
   playEpisode: (index: number) => void;
   togglePlayPause: () => void;
+  /** 重头播放：重建解码器 + 强制重拉直链，用于快进卡死后的恢复 */
+  restartPlayback: () => Promise<void>;
   seek: (duration: number) => void;
   handlePlaybackStatusUpdate: (newStatus: AVPlaybackStatus) => void;
   setLoading: (loading: boolean) => void;
@@ -54,6 +56,14 @@ interface PlayerState {
   setOutroStartTime: () => void;
   reset: () => void;
   _seekTimeout?: NodeJS.Timeout;
+  /** 连续快进时下发的目标位置（避免在旧的 status.positionMillis 上反复重算） */
+  _pendingSeekPosition?: number;
+  /** 原生 seek 未返回前不再叠加新的 seek */
+  _seekInFlight?: boolean;
+  _lastSeekAt?: number;
+  /** 下次 loadVideo 强制重拉 detail（播放卡死/异常退出后进来用） */
+  _forceReloadOnEnter?: boolean;
+  markStale: () => void;
   _isRecordSaveThrottled: boolean;
   // Internal helper
   _savePlayRecord: (updates?: Partial<PlayRecord>, options?: { immediate?: boolean }) => void;
@@ -79,9 +89,16 @@ const usePlayerStore = create<PlayerState>((set, get) => ({
   introEndTime: undefined,
   outroStartTime: undefined,
   _seekTimeout: undefined,
+  _pendingSeekPosition: undefined,
+  _seekInFlight: false,
+  _lastSeekAt: 0,
+  _forceReloadOnEnter: false,
   _isRecordSaveThrottled: false,
 
   setVideoRef: (ref) => set({ videoRef: ref }),
+
+  /** 播放卡死/出错时调用：下次进播放页强制重拉 detail，避免复用过期直链 */
+  markStale: () => set({ _forceReloadOnEnter: true }),
 
   loadVideo: async ({ source, id, episodeIndex, position, title }) => {
     const perfStart = performance.now();
@@ -103,7 +120,15 @@ const usePlayerStore = create<PlayerState>((set, get) => ({
       isLoading: true,
     });
 
-    const needsDetailInit = !detail || !episodes || episodes.length === 0 || detail.title !== title;
+    // 卡死/闪退后重新进来时，detailStore 里可能还留着上一次的 detail，
+    // 但播放直链早已过期（或上次 seek 卡在旧位置）。这种情况下标题虽然相同，
+    // 也必须重新 init 拿新地址，否则表现就是"上次的视频怎么都播不了"。
+    const sameVideo = detail?.title === title;
+    const staleLoad = !!get()._forceReloadOnEnter;
+    if (staleLoad) set({ _forceReloadOnEnter: false });
+
+    const needsDetailInit =
+      !detail || !episodes || episodes.length === 0 || !sameVideo || staleLoad;
     logger.info(`[PERF] Detail check - needsInit: ${needsDetailInit}, hasDetail: ${!!detail}, episodesCount: ${episodes?.length || 0}`);
 
     if (needsDetailInit) {
@@ -272,27 +297,88 @@ const usePlayerStore = create<PlayerState>((set, get) => ({
     }
   },
 
+  /**
+   * 重头播放。
+   *
+   * 卡死过的播放器实例可能已经半废（OMX 解码器 flush 不回来、status 不再更新），
+   * 单纯 replayAsync 经常什么也不发生。这里做的是：
+   * 1) 清掉残留 seek 状态与在飞标记；
+   * 2) 强制下次 loadVideo 重新拉 detail（拿新直链）；
+   * 3) 按当前集重载，把解码器整个重建一遍。
+   */
+  restartPlayback: async () => {
+    const { currentEpisodeIndex, episodes, _seekTimeout } = get();
+    if (!episodes.length) return;
+
+    if (_seekTimeout) clearTimeout(_seekTimeout);
+    set({
+      isSeeking: false,
+      _seekTimeout: undefined,
+      _pendingSeekPosition: undefined,
+      _seekInFlight: false,
+      progressPosition: 0,
+      seekPosition: 0,
+      initialPosition: 0,
+      status: null,
+      _forceReloadOnEnter: true,
+    });
+
+    const detail = useDetailStore.getState().detail;
+    if (!detail) return;
+
+    const index = Math.max(0, currentEpisodeIndex);
+    await get().loadVideo({
+      source: detail.source,
+      id: detail.id.toString(),
+      title: detail.title,
+      episodeIndex: index,
+      position: 0,
+    });
+
+    // loadVideo 之后 Video 会重新挂载，等它 ready 再从头播
+    setTimeout(() => {
+      get().videoRef?.current?.playFromPositionAsync?.(0).catch(() => {});
+    }, 600);
+  },
+
   seek: async (duration) => {
     const { status, videoRef } = get();
     if (!status?.isLoaded || !status.durationMillis) return;
 
-    const newPosition = Math.max(0, Math.min(status.positionMillis + duration, status.durationMillis));
-    try {
-      await videoRef?.current?.setPositionAsync(newPosition);
-    } catch (error) {
-      logger.debug("Failed to seek video:", error);
-      Toast.show({ type: "error", text1: "快进/快退失败" });
-    }
+    // 连续快进（长按 200ms 一次）时不能在 status.positionMillis 基础上算：
+    // 那里是上一次 playbackStatusUpdate 推来的旧值，会把目标位置反复算回原处，
+    // 并对 ExoPlayer 发起一串重叠 seek，老 TV 上直接卡死/闪退。
+    // 改为：以下发的目标位置为基准累加，并且同时只允许一个 seek 在飞。
+    const now = Date.now();
+    const base = get()._pendingSeekPosition ?? status.positionMillis;
+    const newPosition = Math.max(0, Math.min(base + duration, status.durationMillis));
+    if (Math.abs(newPosition - base) < 1) return;
 
     set({
+      _pendingSeekPosition: newPosition,
+      _lastSeekAt: now,
       isSeeking: true,
       seekPosition: newPosition / status.durationMillis,
     });
 
+    // 上一次 seek 还没完成就不再叠加，等它落地后由下次事件补上
+    if (get()._seekInFlight) return;
+    set({ _seekInFlight: true });
+
+    try {
+      await videoRef?.current?.setPositionAsync(get()._pendingSeekPosition ?? newPosition);
+    } catch (error) {
+      logger.debug("Failed to seek video:", error);
+    } finally {
+      set({ _seekInFlight: false });
+    }
+
     if (get()._seekTimeout) {
       clearTimeout(get()._seekTimeout);
     }
-    const timeoutId = setTimeout(() => set({ isSeeking: false }), 1000);
+    const timeoutId = setTimeout(() => {
+      set({ isSeeking: false, _pendingSeekPosition: undefined });
+    }, 1200);
     set({ _seekTimeout: timeoutId });
   },
 
@@ -423,6 +509,20 @@ const usePlayerStore = create<PlayerState>((set, get) => ({
       }
     }
 
+    // expo-av 每秒推多次 status；每次都 set 一个全新对象会让播放页整棵树重渲染，
+    // 老 TV 上叠加 seek 直接把 UI 线程压死。这里只在"有意义的字段"变化时才写 store。
+    const prev = get().status;
+    const positionDelta = prev?.isLoaded
+      ? Math.abs((newStatus.positionMillis ?? 0) - ((prev as any).positionMillis ?? 0))
+      : Infinity;
+    const sameShape =
+      prev?.isLoaded === newStatus.isLoaded &&
+      (prev as any)?.isPlaying === newStatus.isPlaying &&
+      (prev as any)?.isBuffering === newStatus.isBuffering &&
+      (prev as any)?.durationMillis === newStatus.durationMillis &&
+      positionDelta < 1000;
+    if (sameShape) return;
+
     const progressPosition = newStatus.durationMillis ? newStatus.positionMillis / newStatus.durationMillis : 0;
     set({ status: newStatus, progressPosition });
   },
@@ -437,11 +537,14 @@ const usePlayerStore = create<PlayerState>((set, get) => ({
   setPlaybackRate: async (rate) => {
     const { videoRef } = get();
     const detail = useDetailStore.getState().detail;
-    
+
     try {
+      // 只通过 ref 改播放速度，不写 playbackRate 到 props：
+      // videoProps 里的 rate 一变，<Video> 就会重建 source，
+      // 老 TV 上等于重新初始化 OMX 解码器，连着操作极易 native crash。
       await videoRef?.current?.setRateAsync(rate, true);
       set({ playbackRate: rate });
-      
+
       // Save the playback rate preference
       if (detail) {
         await PlayerSettingsManager.save(detail.source, detail.id.toString(), { playbackRate: rate });
@@ -452,6 +555,10 @@ const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   reset: () => {
+    // 清掉挂起的 seek 定时器与"在飞"标记：否则下次进播放页
+    // 会被上次残留的 _seekInFlight / _pendingSeekPosition 挡住，表现为"重开后不能播放"。
+    const pendingTimeout = get()._seekTimeout;
+    if (pendingTimeout) clearTimeout(pendingTimeout);
     set({
       episodes: [],
       currentEpisodeIndex: 0,
@@ -466,13 +573,21 @@ const usePlayerStore = create<PlayerState>((set, get) => ({
       playbackRate: 1.0,
       introEndTime: undefined,
       outroStartTime: undefined,
+      isSeeking: false,
+      _seekTimeout: undefined,
+      _pendingSeekPosition: undefined,
+      _seekInFlight: false,
+      _lastSeekAt: 0,
     });
   },
 
   handleVideoError: async (errorType: 'ssl' | 'network' | 'other', failedUrl: string) => {
     const perfStart = performance.now();
     logger.error(`[VIDEO_ERROR] Handling ${errorType} error for URL: ${failedUrl}`);
-    
+
+    // 出错说明当前 detail 里的直链/状态不可信，下次进播放页必须重拉
+    set({ _forceReloadOnEnter: true });
+
     const detailStoreState = useDetailStore.getState();
     const { detail } = detailStoreState;
     const { currentEpisodeIndex } = get();

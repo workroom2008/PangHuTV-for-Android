@@ -4,6 +4,10 @@ import usePlayerStore from "@/stores/playerStore";
 
 const SEEK_STEP = 20 * 1000; // 快进/快退的时间步长（毫秒）
 
+// 长按连续快进的最小间隔。原 200ms 对老 TV 太密：
+// ExoPlayer 的 seek 还没落地就叠下一个，队列堆满后播控线程卡死甚至闪退。
+const FAST_SEEK_INTERVAL = 600;
+
 // 定时器延迟时间（毫秒）
 const CONTROLS_TIMEOUT = 5000;
 
@@ -93,7 +97,7 @@ export const useTVRemoteHandler = () => {
           if (!fastForwardIntervalRef.current && event.eventKeyAction === 0) {
             fastForwardIntervalRef.current = setInterval(() => {
               seek(-SEEK_STEP); 
-            }, 200);
+            }, FAST_SEEK_INTERVAL);
           }
           break;
         case "right":
@@ -104,7 +108,7 @@ export const useTVRemoteHandler = () => {
           if (!fastForwardIntervalRef.current && event.eventKeyAction === 0) {
             fastForwardIntervalRef.current = setInterval(() => {
               seek(SEEK_STEP); 
-            }, 200);
+            }, FAST_SEEK_INTERVAL);
           }
           break;
         case "down":

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useImperativeHandle, forwardRef, useCallback, useEffect } from "react";
-import { View, TextInput, StyleSheet, Animated, Platform } from "react-native";
+import { View, TextInput, StyleSheet, Animated, Pressable } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { SettingsSection } from "./SettingsSection";
 import { useSettingsFocus } from "@/hooks/useSettingsFocus";
@@ -22,15 +22,23 @@ export interface LiveStreamSectionRef {
   setInputValue: (value: string) => void;
 }
 
+/**
+ * 直播源地址区块。
+ * TV 上输入框不参与方向键焦点（详见 APIConfigSection 注释），
+ * 由 Pressable 行承载焦点，按 OK 才进入编辑。
+ */
 export const LiveStreamSection = forwardRef<LiveStreamSectionRef, LiveStreamSectionProps>(
   ({ onChanged, onFocus, onBlur, onPress }, ref) => {
     const { m3uUrl, setM3uUrl, remoteInputEnabled } = useSettingsStore();
     const { serverUrl } = useRemoteControlStore();
-    const [isInputFocused, setIsInputFocused] = useState(false);
-    const [isSectionFocused, setIsSectionFocused] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [isRowFocused, setIsRowFocused] = useState(false);
     const inputRef = useRef<TextInput>(null);
-    const inputAnimationStyle = useButtonAnimation(isSectionFocused, 1.01);
+    const rowRef = useRef<any>(null);
+    const animationStyle = useButtonAnimation(isRowFocused || isEditing, 1.01);
     const deviceType = useResponsiveLayout().deviceType;
+    const isTV = deviceType === "tv";
+    const focusRegistry = useSettingsFocus();
 
     const handleUrlChange = (url: string) => {
       setM3uUrl(url);
@@ -44,46 +52,36 @@ export const LiveStreamSection = forwardRef<LiveStreamSectionRef, LiveStreamSect
       },
     }));
 
-    const focusRegistry = useSettingsFocus();
-    const focusSelf = useCallback(() => inputRef.current?.focus(), []);
+    const handleRowFocus = () => {
+      setIsRowFocused(true);
+      onFocus?.();
+    };
 
-    // 注册到设置页焦点链
+    const handleRowBlur = () => {
+      setIsRowFocused(false);
+      onBlur?.();
+    };
+
+    const handleRowPress = () => {
+      setIsEditing(true);
+      onPress?.();
+      setTimeout(() => inputRef.current?.focus(), 60);
+    };
+
+    const exitEditing = useCallback(() => {
+      setIsEditing(false);
+      setTimeout(() => rowRef.current?.focus?.(), 60);
+    }, []);
+
+    const focusSelf = useCallback(() => rowRef.current?.focus?.(), []);
+
     useEffect(() => {
       focusRegistry.register({ key: FOCUS_KEY, focus: focusSelf });
       return () => focusRegistry.unregister(FOCUS_KEY);
     }, [focusRegistry, focusSelf]);
 
-    const handleSectionFocus = () => {
-      setIsSectionFocused(true);
-      onFocus?.();
-    };
-
-    const handleSectionBlur = () => {
-      setIsSectionFocused(false);
-      onBlur?.();
-    };
-
-    const handlePress = () => {
-      inputRef.current?.focus();
-      onPress?.();
-    }
-
-    // 遥控器 select 由 Pressable.onPress 处理；不用 useTVEventHandler 抢全局事件。
-
-
-        const [selection, setSelection] = useState<{ start: number; end: number }>({
-          start: 0,
-          end: 0,
-        });
-        // 当用户手动移动光标或选中文本时，同步到 state（可选）
-        const onSelectionChange = ({
-          nativeEvent: { selection },
-        }: any) => {
-          setSelection(selection);
-        };
-
     return (
-      <SettingsSection focusable onFocus={handleSectionFocus} onBlur={handleSectionBlur} onPress={handlePress}>
+      <SettingsSection focusable onFocus={handleRowFocus} onBlur={handleRowBlur}>
         <View style={styles.inputContainer}>
           <View style={styles.titleContainer}>
             <ThemedText style={styles.sectionTitle}>直播源地址</ThemedText>
@@ -91,35 +89,51 @@ export const LiveStreamSection = forwardRef<LiveStreamSectionRef, LiveStreamSect
               <ThemedText style={styles.subtitle}>用手机访问 {serverUrl}，可远程输入</ThemedText>
             )}
           </View>
-          <Animated.View style={inputAnimationStyle}>
-            <TextInput
-              ref={inputRef}
-              focusable
-              style={[styles.input, isInputFocused && styles.inputFocused]}
-              value={m3uUrl}
-              onChangeText={handleUrlChange}
-              placeholder="输入 M3U 直播源地址"
-              placeholderTextColor="#888"
-              autoCapitalize="none"
-              autoCorrect={false}
-              onFocus={() => {
-                setIsInputFocused(true);
-                // 将光标移动到文本末尾
-                const end = m3uUrl.length;
-                setSelection({ start: end, end: end });
-                // 有时需要延迟一下，让系统先完成 focus 再设置 selection
-                //（在 Android 上更可靠）
-                setTimeout(() => {
-                  // 对于受控的 selection 已经生效，这里仅作保险
-                  inputRef.current?.setNativeProps({ selection: { start: end, end: end } });
-                }, 0);
-              }}
-              selection={selection}
-              onSelectionChange={onSelectionChange} // 可选
-
-              onBlur={() => setIsInputFocused(false)}
-            // onPress={handlePress}
-            />
+          <Animated.View style={animationStyle}>
+            {isTV ? (
+              <Pressable
+                ref={rowRef}
+                focusable
+                style={[styles.input, styles.rowPressable, (isRowFocused || isEditing) && styles.inputFocused]}
+                onFocus={handleRowFocus}
+                onBlur={handleRowBlur}
+                onPress={handleRowPress}
+              >
+                {isEditing ? (
+                  <TextInput
+                    ref={inputRef}
+                    focusable={false}
+                    autoFocus
+                    style={styles.inlineInput}
+                    value={m3uUrl}
+                    onChangeText={handleUrlChange}
+                    placeholder="输入 M3U 直播源地址"
+                    placeholderTextColor="#888"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    onBlur={exitEditing}
+                    onSubmitEditing={exitEditing}
+                  />
+                ) : (
+                  <ThemedText style={styles.rowValue} numberOfLines={1}>
+                    {m3uUrl || "未设置"}
+                  </ThemedText>
+                )}
+              </Pressable>
+            ) : (
+              <TextInput
+                ref={inputRef}
+                style={[styles.input, isRowFocused && styles.inputFocused]}
+                value={m3uUrl}
+                onChangeText={handleUrlChange}
+                placeholder="输入 M3U 直播源地址"
+                placeholderTextColor="#888"
+                autoCapitalize="none"
+                autoCorrect={false}
+                onFocus={handleRowFocus}
+                onBlur={handleRowBlur}
+              />
+            )}
           </Animated.View>
         </View>
       </SettingsSection>
@@ -157,6 +171,19 @@ const styles = StyleSheet.create({
     backgroundColor: "#3a3a3c",
     color: "white",
     borderColor: "transparent",
+  },
+  rowPressable: {
+    justifyContent: "center",
+  },
+  rowValue: {
+    fontSize: 16,
+    color: "white",
+  },
+  inlineInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "white",
+    padding: 0,
   },
   inputFocused: {
     borderColor: Colors.dark.primary,

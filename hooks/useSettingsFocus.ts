@@ -23,6 +23,8 @@ export type FocusNode = {
 type Registry = {
   register: (node: FocusNode) => void;
   unregister: (key: string) => void;
+  /** 按稳定 key 聚焦（页面按视觉顺序显式驱动时使用） */
+  focusKey: (key: string) => boolean;
   focusNext: (currentKey?: string) => boolean;
   focusPrev: (currentKey?: string) => boolean;
   focusFirst: () => boolean;
@@ -31,6 +33,7 @@ type Registry = {
 const noopRegistry: Registry = {
   register: () => {},
   unregister: () => {},
+  focusKey: () => false,
   focusNext: () => false,
   focusPrev: () => false,
   focusFirst: () => false,

@@ -5,15 +5,21 @@ import { isPrivateAccess } from "./api";
 
 /**
  * 是否 TV 客户端。
- * Platform.isTV 在部分 OEM Android TV（如 SHARP 6.0）上不可靠，
- * 与 useResponsiveLayout 的宽度断点（>=1024 视为 tv）保持一致。
+ *
+ * 注意不能用 Math.max(w,h) 判断：竖屏手机普遍是 750x1334 / 1080x2400，
+ * max 一定 >=1024，会把手机全部误判成 TV，于是手机也带上 client=tv，
+ * 服务端据此把每个分片都代理一遍 —— 手机端播极品源卡死就是这么来的。
+ *
+ * 这里用「短边」做断点：TV 一定是横屏大屏，短边 >=1024；
+ * 手机竖屏短边 750~1080，手机横屏短边也基本 <= 800。
+ * Platform.isTV 在部分 OEM Android TV（如 SHARP 6.0）上不可靠，仍需尺寸兜底。
  */
 function isTVClient(): boolean {
   if (Platform.isTV) return true;
   if (Platform.OS !== "android" && Platform.OS !== "ios") return false;
   try {
     const { width, height } = Dimensions.get("window");
-    return Math.min(width, height) >= 1 && Math.max(width, height) >= 1024;
+    return Math.min(width, height) >= 1024;
   } catch {
     return false;
   }

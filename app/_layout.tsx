@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, useRouter, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { Platform, View, StyleSheet } from "react-native";
@@ -28,7 +28,9 @@ export default function RootLayout() {
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
   const { loadSettings, remoteInputEnabled, apiBaseUrl } = useSettingsStore();
-  const { startServer, stopServer } = useRemoteControlStore();
+  const { startServer, stopServer, lastMessage } = useRemoteControlStore();
+  const router = useRouter();
+  const pathname = usePathname();
   const { checkLoginStatus } = useAuthStore();
   const { checkForUpdate, lastCheckTime } = useUpdateStore();
   const responsiveConfig = useResponsiveLayout();
@@ -75,6 +77,16 @@ export default function RootLayout() {
       stopServer();
     }
   }, [remoteInputEnabled, startServer, stopServer, responsiveConfig.deviceType]);
+
+  // 手机端「发送文本到电视」：不论当前停在哪一页，都跳到搜索页去接文本
+  useEffect(() => {
+    if (!lastMessage) return;
+    if (pathname !== "/search") {
+      router.push("/search");
+    }
+    // 只依赖 lastMessage：搜索页自己消费并 clearMessage
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastMessage]);
 
   if (!loaded && !error) {
     return null;

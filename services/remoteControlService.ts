@@ -1,4 +1,5 @@
 import TCPHttpServer from "./tcpHttpServer";
+import { NativeEventEmitter, NativeModules, Platform } from "react-native";
 import Logger from '@/utils/Logger';
 
 const logger = Logger.withTag('RemoteControl');
@@ -146,6 +147,54 @@ class RemoteControlService {
   constructor() {
     this.httpServer = new TCPHttpServer();
     this.setupRequestHandler();
+    this.setupNativeBridge();
+  }
+
+  /**
+   * Android 原生 HTTP server 桥接。
+   * 原生侧只负责收包，业务仍在 JS：用同一套 requestHandler 处理并回写页面。
+   */
+  private setupNativeBridge() {
+    const native: any = (NativeModules as any)?.RemoteInput;
+    if (!native || Platform.OS !== "android") return;
+
+    const emitter = new NativeEventEmitter(native);
+    emitter.addListener("onConfig", async (evt: { payload: string }) => {
+      try {
+        const body = evt?.payload || "{}";
+        const result = await this.applyConfig(JSON.parse(body) || {});
+        logger.info("[RemoteControl] native /config ->", result);
+      } catch (e) {
+        logger.info("[RemoteControl] native /config failed:", e);
+      }
+    });
+
+    emitter.addListener("onHandshake", () => {
+      this.onHandshake();
+    });
+
+    // 手机端「发送文本到电视」→ 原生 postMessage → 这里转给业务层（搜索页）
+    emitter.addListener("RemoteInputText", (evt: { text?: string }) => {
+      const text = evt?.text ?? "";
+      logger.debug("[RemoteControl] native text:", text);
+      if (text) this.onMessage(text);
+    });
+  }
+
+  /** 手机端提交配置后，设置页/原生页面需要同步最新值 */
+  public async pushPage() {
+    await this.refreshPage();
+  }
+
+  /** 页面 HTML 变化时同步给原生 server */
+  public async refreshPage() {
+    const native: any = (NativeModules as any)?.RemoteInput;
+    if (!native || Platform.OS !== "android") return;
+    try {
+      native.setPage?.(getRemotePageHTML(await this.getConfig()));
+    } catch (e) {
+      logger.info("[RemoteControl] refreshPage failed:", e);
+    }
   }
 
   private setupRequestHandler() {

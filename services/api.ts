@@ -120,6 +120,23 @@ export interface SearchResult {
   type_name?: string;
 }
 
+export interface SearchSourceTab {
+  id: string;
+  name: string;
+  /** 该源下的命中数（"综合" tab 为总数） */
+  count: number;
+}
+
+export interface SearchPageResult {
+  list: SearchResult[];
+  total: number;
+  current: number;
+  pageSize: number;
+  hasMore: boolean;
+  /** "综合" + 各采集源，来自响应体 sources 字段 */
+  sources: SearchSourceTab[];
+}
+
 export interface PlayInfoDetail {
   detail: VideoDetail;
   sources: SearchResult[];
@@ -392,29 +409,61 @@ export class API {
     );
   }
 
-  /** 库存聚合搜索 */
+  /**
+   * 库存聚合搜索。
+   *
+   * 服务端细节（server/internal/handler/index_handler.go:234）：
+   * - pageSize 默认 12、**硬上限 50**，调大无效；
+   * - 响应里带 `sources: [{id,name,count}]`，是各采集源的命中数，
+   *   直接用它渲染源选择器，不用再单独请求 /api/sources；
+   * - `source` 传空 = 综合聚合，传具体 id = 只搜该源。
+   */
   async searchByKeyword(
     q: string,
     current = 1,
     pageSize = 50,
     signal?: AbortSignal
-  ): Promise<SearchResult[]> {
+  ): Promise<SearchPageResult> {
     const url = `/api/searchFilm?keyword=${encodeURIComponent(q)}&current=${current}&pageSize=${pageSize}`;
     const data = await panghuFetch(this.baseURL, url, { signal });
-    const nameMap = this.parseSourceNameMap(data);
-    return ((data?.list || []) as any[]).map((item) => this.mapMovieBasicToSearchResult(item, nameMap));
+    return this.mapSearchPage(data);
   }
 
-  /** 单源库存搜索 */
+  /** 单源搜索（同一接口带 source 参数） */
   async searchBySource(
     q: string,
     resourceId: string,
+    current = 1,
+    pageSize = 50,
     signal?: AbortSignal
-  ): Promise<SearchResult[]> {
-    const url = `/api/searchFilm?keyword=${encodeURIComponent(q)}&source=${encodeURIComponent(resourceId)}&current=1&pageSize=50`;
+  ): Promise<SearchPageResult> {
+    const url = `/api/searchFilm?keyword=${encodeURIComponent(q)}&source=${encodeURIComponent(resourceId)}&current=${current}&pageSize=${pageSize}`;
     const data = await panghuFetch(this.baseURL, url, { signal });
+    return this.mapSearchPage(data);
+  }
+
+  private mapSearchPage(data: any): SearchPageResult {
     const nameMap = this.parseSourceNameMap(data);
-    return ((data?.list || []) as any[]).map((item) => this.mapMovieBasicToSearchResult(item, nameMap));
+    const list = ((data?.list || []) as any[]).map((item) =>
+      this.mapMovieBasicToSearchResult(item, nameMap)
+    );
+    const page = data?.page || {};
+    const total = Number(page.total ?? 0);
+    const pageSize = Number(page.pageSize ?? 0) || list.length;
+    const current = Number(page.current ?? 1) || 1;
+    const tabs = ((data?.sources || []) as any[]).map((s) => ({
+      id: String(s.id ?? ""),
+      name: String(s.name ?? ""),
+      count: Number(s.count ?? 0),
+    }));
+    return {
+      list,
+      total,
+      current,
+      pageSize,
+      hasMore: pageSize > 0 && current * pageSize < total,
+      sources: tabs,
+    };
   }
 
   /** 详情 + 播放信息：detail.list 线路 → 每线路一个 SearchResult（胖虎"线路"对应 OrionTV"源"）
