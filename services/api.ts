@@ -1,4 +1,78 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAuthToken, setAuthToken } from "./authToken";
+
+// region: --- 胖虎请求基座 ---
+// 会话恢复回调（由 authStore 注册），401 时自动重登并重试一次
+let sessionRestorer: (() => Promise<boolean>) | null = null;
+
+export function setSessionRestorer(restorer: (() => Promise<boolean>) | null) {
+  sessionRestorer = restorer;
+}
+
+// 私有化开关的同步镜像（getSiteBasic 成功后更新，供 URL 构造函数同步取用）
+let privateAccess = false;
+
+export function isPrivateAccess(): boolean {
+  return privateAccess;
+}
+
+export function setPrivateAccess(v: boolean): void {
+  privateAccess = v;
+}
+
+/**
+ * 胖虎统一请求：Bearer 鉴权 + {code,data,msg} 包裹解析 + X-Auth-Token 续签 + 401 重登重试。
+ * 判成败先看 HTTP 状态码（401/403 非 200），再看 code（0|1 成功）。
+ */
+export async function panghuFetch(
+  baseURL: string,
+  path: string,
+  options: RequestInit = {}
+): Promise<any> {
+  if (!baseURL) {
+    throw new Error("API_URL_NOT_SET");
+  }
+
+  const request = async (): Promise<Response> => {
+    const headers: Record<string, string> = {
+      ...((options.headers as Record<string, string>) || {}),
+    };
+    const token = await getAuthToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    return fetch(`${baseURL}${path}`, { ...options, headers });
+  };
+
+  let response = await request();
+
+  if (response.status === 401 && sessionRestorer && !path.startsWith("/api/login")) {
+    const restored = await sessionRestorer();
+    if (restored) {
+      response = await request();
+    }
+  }
+
+  // 服务端 JWT 过期但会话有效时经 X-Auth-Token 下发续签 token
+  const refreshed = response.headers?.get?.("X-Auth-Token");
+  if (refreshed) {
+    await setAuthToken(refreshed);
+  }
+
+  if (response.status === 401) {
+    throw new Error("UNAUTHORIZED");
+  }
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  const body = await response.json();
+  if (body && (body.code === 0 || body.code === 1)) {
+    return body.data;
+  }
+  throw new Error((body && body.msg) || "请求失败");
+}
+// endregion
 
 // region: --- Interface Definitions ---
 export interface DoubanItem {
@@ -92,6 +166,7 @@ export class API {
   }
 
   public setSessionRestorer(restorer: (() => Promise<boolean>) | null) {
+    setSessionRestorer(restorer);
     this.sessionRestorer = restorer;
   }
 
