@@ -317,12 +317,11 @@ export default function HomeScreen() {
       {/* 顶部导航 */}
       {renderHeader()}
 
-      {/* 源选择器（选源后分类与内容按源加载） */}
+      {/* 源选择器（选源后分类与内容按源加载），渲染模式与分类行完全一致 */}
       {sources.length > 0 && (
-        <View style={[dynamicStyles.categoryContainer, dynamicStyles.sourceRowContainer]}>
-          <ThemedText style={dynamicStyles.sourceRowLabel}>源</ThemedText>
+        <View style={dynamicStyles.categoryContainer}>
           <FlatList
-            data={[{ id: "", name: "全部" }, ...sources]}
+            data={[{ id: "", name: "全部源" }, ...sources]}
             renderItem={({ item }) => {
               const isSelected = selectedSource === item.id;
               return (
@@ -330,9 +329,8 @@ export default function HomeScreen() {
                   text={item.name}
                   onPress={() => selectSource(item.id)}
                   isSelected={isSelected}
-                  style={dynamicStyles.sourceButton}
-                  textStyle={dynamicStyles.sourceText}
-                  variant="ghost"
+                  style={dynamicStyles.categoryButton}
+                  textStyle={dynamicStyles.categoryText}
                 />
               );
             }}
