@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { SettingsManager } from "@/services/storage";
+import { SettingsManager, LoginCredentialsManager } from "@/services/storage";
 import { api, SiteBasic } from "@/services/api";
 import { clearAuthToken, clearServerFlags } from "@/services/authToken";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -34,6 +34,8 @@ interface SettingsState {
   isLoadingServerConfig: boolean;
   loadSettings: () => Promise<void>;
   fetchServerConfig: () => Promise<void>;
+  /** 设置页保存账号：非空时存凭据并立即登录（供远程输入一次配好） */
+  saveAccountAndLogin: (username: string, password: string) => Promise<boolean>;
   setApiBaseUrl: (url: string) => void;
   setM3uUrl: (url: string) => void;
   setRemoteInputEnabled: (enabled: boolean) => void;
@@ -87,6 +89,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     })();
     serverConfigPromise = p;
     return p;
+  },
+  saveAccountAndLogin: async (username, password) => {
+    if (!username.trim()) {
+      return false;
+    }
+    await LoginCredentialsManager.save({ username: username.trim(), password });
+    try {
+      await api.login(username.trim(), password);
+      return true;
+    } catch (error) {
+      logger.warn("saveAccountAndLogin failed:", error);
+      return false;
+    }
   },
   setApiBaseUrl: (url) => set({ apiBaseUrl: url }),
   setM3uUrl: (url) => set({ m3uUrl: url }),

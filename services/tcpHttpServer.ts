@@ -99,11 +99,15 @@ class TCPHttpServer {
   }
 
   public async start(): Promise<string> {
-    const netState = await NetInfo.fetch();
+    // 冷启动时网络栈可能未就绪，NetInfo 拿不到 IP：重试几次
     let ipAddress: string | null = null;
-    
-    if (netState.type === 'wifi' || netState.type === 'ethernet') {
-      ipAddress = (netState.details as any)?.ipAddress ?? null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const netState = await NetInfo.fetch();
+      if (netState.type === 'wifi' || netState.type === 'ethernet') {
+        ipAddress = (netState.details as any)?.ipAddress ?? null;
+      }
+      if (ipAddress) break;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
     if (!ipAddress) {

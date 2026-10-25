@@ -47,8 +47,10 @@ export const useRemoteControlStore = create<RemoteControlState>((set, get) => ({
       const url = await remoteControlService.startServer();
       logger.info('Server started, URL:', url);
       set({ isServerRunning: true, serverUrl: url, error: null });
-    } catch {
-      const errorMessage = '启动失败，请强制退应用后重试。';
+    } catch (e) {
+      // 展示真实失败原因（IP 未就绪/端口占用等），不再笼统提示
+      const reason = e instanceof Error ? e.message : String(e);
+      const errorMessage = `启动失败：${reason}`;
       logger.error('Failed to start server:', errorMessage);
       set({ error: errorMessage });
     }

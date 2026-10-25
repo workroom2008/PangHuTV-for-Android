@@ -151,6 +151,7 @@ const LoginModal = () => {
             returnKeyType="next"
             onSubmitEditing={handleUsernameSubmit}
             blurOnSubmit={false}
+            autoFocus
           />
           <TextInput
             ref={passwordInputRef}

@@ -7,9 +7,10 @@ import { ThemedView } from "@/components/ThemedView";
 import { StyledButton } from "@/components/StyledButton";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useSettingsStore } from "@/stores/settingsStore";
-// import useAuthStore from "@/stores/authStore";
+import useAuthStore from "@/stores/authStore";
 import { useRemoteControlStore } from "@/stores/remoteControlStore";
 import { APIConfigSection } from "@/components/settings/APIConfigSection";
+import { AccountSection } from "@/components/settings/AccountSection";
 import { LiveStreamSection } from "@/components/settings/LiveStreamSection";
 import { RemoteInputSection } from "@/components/settings/RemoteInputSection";
 import { UpdateSection } from "@/components/settings/UpdateSection";
@@ -35,10 +36,15 @@ function isSectionItem(
 }
 
 export default function SettingsScreen() {
-  const { loadSettings, saveSettings, setApiBaseUrl, setM3uUrl } = useSettingsStore();
+  const { loadSettings, saveSettings, saveAccountAndLogin, setApiBaseUrl, setM3uUrl } = useSettingsStore();
   const { lastMessage, targetPage, clearMessage } = useRemoteControlStore();
   const backgroundColor = useThemeColor({}, "background");
   const insets = useSafeAreaInsets();
+
+  // 账号区（API 地址下方）：保存即登录
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const accountSectionRef = useRef<any>(null);
 
   // 响应式布局配置
   const responsiveConfig = useResponsiveLayout();
@@ -73,6 +79,10 @@ export default function SettingsScreen() {
     if (currentSection === "api" && apiSectionRef.current) {
       // API Config Section
       setApiBaseUrl(message);
+    } else if (currentSection === "username" && accountSectionRef.current) {
+      accountSectionRef.current.setUsernameValue(message);
+    } else if (currentSection === "password" && accountSectionRef.current) {
+      accountSectionRef.current.setPasswordValue(message);
     } else if (currentSection === "livestream" && liveStreamSectionRef.current) {
       // Live Stream Section
       setM3uUrl(message);
@@ -83,6 +93,17 @@ export default function SettingsScreen() {
     setIsLoading(true);
     try {
       await saveSettings();
+      // 账号区非空时保存凭据并立即登录（远程输入一次配好服务器+账号）
+      if (loginUsername.trim()) {
+        const loginOk = await saveAccountAndLogin(loginUsername, loginPassword);
+        if (loginOk) {
+          await useAuthStore.getState().checkLoginStatus(useSettingsStore.getState().apiBaseUrl);
+        }
+        Toast.show({
+          type: loginOk ? "success" : "error",
+          text1: loginOk ? "已登录" : "登录失败，请检查用户名密码",
+        });
+      }
       setHasChanges(false);
       Toast.show({
         type: "success",
@@ -184,6 +205,26 @@ export default function SettingsScreen() {
         />
       ),
       key: "api",
+    },
+    {
+      component: (
+        <AccountSection
+          ref={accountSectionRef}
+          username={loginUsername}
+          password={loginPassword}
+          setUsername={(v) => {
+            setLoginUsername(v);
+            markAsChanged();
+          }}
+          setPassword={(v) => {
+            setLoginPassword(v);
+            markAsChanged();
+          }}
+          onFocus={() => setCurrentSection("username")}
+          onBlur={() => setCurrentSection(null)}
+        />
+      ),
+      key: "account",
     },
     deviceType !== "mobile" && {
       component: (
