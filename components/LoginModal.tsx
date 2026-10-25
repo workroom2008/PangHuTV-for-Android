@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Modal, View, TextInput, StyleSheet, ActivityIndicator, Alert, Keyboard, InteractionManager } from "react-native";
+import { View, TextInput, StyleSheet, ActivityIndicator, Alert, Keyboard, InteractionManager, Pressable, BackHandler } from "react-native";
 import { usePathname } from "expo-router";
 import Toast from "react-native-toast-message";
 import useAuthStore from "@/stores/authStore";
@@ -10,7 +10,12 @@ import { LoginCredentialsManager } from "@/services/storage";
 import { ThemedView } from "./ThemedView";
 import { ThemedText } from "./ThemedText";
 import { StyledButton } from "./StyledButton";
+import { Colors } from "@/constants/Colors";
 
+/**
+ * 登录遮罩层（不用 RN Modal：OEM Android 6 TV 上 Modal 内样式丢失且不可聚焦）。
+ * 绝对定位全屏遮罩 + 居中卡片，参与普通渲染树，遥控焦点正常。
+ */
 const LoginModal = () => {
   const { isLoginModalVisible, hideLoginModal, checkLoginStatus } = useAuthStore();
   const { apiBaseUrl } = useSettingsStore();
@@ -23,14 +28,12 @@ const LoginModal = () => {
   const pathname = usePathname();
   const isSettingsPage = pathname.includes("settings");
 
-  const [isModalReady, setIsModalReady] = useState(false);
+  const visible = isLoginModalVisible && !isSettingsPage;
 
-  // Load saved credentials when modal opens
+  // Load saved credentials when visible
   useEffect(() => {
-    if (isLoginModalVisible && !isSettingsPage) {
-            // 先确保键盘状态清理
+    if (visible) {
       Keyboard.dismiss();
-
       const loadCredentials = async () => {
         const savedCredentials = await LoginCredentialsManager.get();
         if (savedCredentials) {
@@ -40,37 +43,20 @@ const LoginModal = () => {
       };
       loadCredentials();
 
-      // 延迟设置 Modal 就绪状态
-      const readyTimeout = setTimeout(() => {
-        setIsModalReady(true);
-      }, 300);
-
-      return () => {
-        clearTimeout(readyTimeout);
-        setIsModalReady(false);
-      };
-    }
-  }, [isLoginModalVisible, isSettingsPage]);
-
-  // Focus management with better TV remote handling
-  useEffect(() => {
-    if (isModalReady && isLoginModalVisible && !isSettingsPage) {
-      // Use a small delay to ensure the modal is fully rendered
+      // 渲染稳定后聚焦用户名框
       const focusTimeout = setTimeout(() => {
         usernameInputRef.current?.focus();
       }, 300);
-
       return () => clearTimeout(focusTimeout);
     }
-  }, [isModalReady, isLoginModalVisible, isSettingsPage]);
+  }, [visible]);
 
-  // 清理 effect - 确保 Modal 关闭时清理所有状态
+  // 遮罩期间拦截返回键（防止底层页面被误触）
   useEffect(() => {
-    return () => {
-      Keyboard.dismiss();
-      setIsModalReady(false);
-    };
-  }, []);
+    if (!visible) return;
+    const handler = BackHandler.addEventListener("hardwareBackPress", () => true);
+    return () => handler.remove();
+  }, [visible]);
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -87,21 +73,9 @@ const LoginModal = () => {
       await LoginCredentialsManager.save({ username, password });
 
       Toast.show({ type: "success", text1: "登录成功" });
-      // hideLoginModal();
 
-      // // Show disclaimer alert after successful login
-      // Alert.alert(
-      //   "免责声明",
-      //   "本应用仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。",
-      //   [{ text: "确定" }]
-      // );
-
-            // 在登录成功后清理状态，再显示 Alert
       const hideAndAlert = () => {
-        hideLoginModal();
-        setIsModalReady(false);
         Keyboard.dismiss();
-
         setTimeout(() => {
           Alert.alert(
             "免责声明",
@@ -110,10 +84,7 @@ const LoginModal = () => {
           );
         }, 100);
       };
-
-      // 使用 InteractionManager 确保 UI 稳定后再执行
       InteractionManager.runAfterInteractions(hideAndAlert);
-
     } catch (error) {
       Toast.show({
         type: "error",
@@ -125,100 +96,106 @@ const LoginModal = () => {
     }
   };
 
-  // Handle navigation between inputs using returnKeyType
   const handleUsernameSubmit = () => {
     passwordInputRef.current?.focus();
   };
 
+  if (!visible) return null;
+
   return (
-    <Modal
-      transparent={true}
-      visible={isLoginModalVisible && !isSettingsPage}
-      animationType="fade"
-      onRequestClose={hideLoginModal}
-    >
-      <View style={styles.overlay}>
-        <ThemedView style={styles.container}>
-          <ThemedText style={styles.title}>需要登录</ThemedText>
-          <ThemedText style={styles.subtitle}>服务器需要验证您的身份</ThemedText>
-          <TextInput
-            ref={usernameInputRef}
-            style={styles.input}
-            placeholder="请输入用户名"
-            placeholderTextColor="#888"
-            value={username}
-            onChangeText={setUsername}
-            returnKeyType="next"
-            onSubmitEditing={handleUsernameSubmit}
-            blurOnSubmit={false}
-            autoFocus
-          />
-          <TextInput
-            ref={passwordInputRef}
-            style={styles.input}
-            placeholder="请输入密码"
-            placeholderTextColor="#888"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-            returnKeyType="go"
-            onSubmitEditing={handleLogin}
-          />
-          <StyledButton
-            text={isLoading ? "" : "登录"}
-            onPress={handleLogin}
-            disabled={isLoading}
-            style={styles.button}
-            hasTVPreferredFocus={false}
-          >
-            {isLoading && <ActivityIndicator color="#fff" />}
-          </StyledButton>
-        </ThemedView>
-      </View>
-    </Modal>
+    <Pressable style={styles.overlay} onPress={(e) => e.stopPropagation()}>
+      <ThemedView style={styles.container}>
+        <ThemedText style={styles.title}>需要登录</ThemedText>
+        <ThemedText style={styles.subtitle}>服务器需要验证您的身份</ThemedText>
+        <TextInput
+          ref={usernameInputRef}
+          style={styles.input}
+          placeholder="请输入用户名"
+          placeholderTextColor="#888"
+          value={username}
+          onChangeText={setUsername}
+          returnKeyType="next"
+          onSubmitEditing={handleUsernameSubmit}
+          blurOnSubmit={false}
+          autoFocus
+          allowFontScaling={false}
+          textAlignVertical="center"
+          underlineColorAndroid="transparent"
+        />
+        <TextInput
+          ref={passwordInputRef}
+          style={styles.input}
+          placeholder="请输入密码"
+          placeholderTextColor="#888"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+          returnKeyType="go"
+          onSubmitEditing={handleLogin}
+          allowFontScaling={false}
+          textAlignVertical="center"
+          underlineColorAndroid="transparent"
+        />
+        <StyledButton
+          text={isLoading ? "" : "登录"}
+          onPress={handleLogin}
+          disabled={isLoading}
+          style={styles.button}
+          hasTVPreferredFocus={false}
+        >
+          {isLoading && <ActivityIndicator color="#fff" />}
+        </StyledButton>
+      </ThemedView>
+    </Pressable>
   );
 };
 
 const styles = StyleSheet.create({
   overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 999,
+    elevation: 999,
   },
   container: {
-    width: "80%",
-    maxWidth: 400,
-    padding: 24,
-    borderRadius: 12,
-    alignItems: "center",
+    width: 460,
+    padding: 28,
+    borderRadius: 14,
+    alignItems: "stretch",
+    borderWidth: 1,
+    borderColor: "#333",
   },
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "bold",
     marginBottom: 8,
+    textAlign: "center",
+    color: "#fff",
   },
   subtitle: {
-    fontSize: 16,
-    color: "#ccc",
-    marginBottom: 20,
+    fontSize: 15,
+    color: "#999",
+    marginBottom: 22,
     textAlign: "center",
   },
   input: {
     width: "100%",
-    height: 50,
-    backgroundColor: "#333",
+    height: 56,
+    backgroundColor: "#26262a",
     borderRadius: 8,
     paddingHorizontal: 16,
     color: "#fff",
-    fontSize: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#555",
+    fontSize: 18,
+    marginBottom: 18,
+    borderWidth: 2,
+    borderColor: "transparent",
   },
   button: {
     width: "100%",
-    height: 50,
+    height: 52,
+    backgroundColor: Colors.dark.primary,
   },
 });
 
