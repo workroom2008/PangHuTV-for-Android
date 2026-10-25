@@ -193,6 +193,18 @@ describe("胖虎接口映射", () => {
     });
   });
 
+  describe("mapMovieRows", () => {
+    it("MovieBasicInfo → SearchResult 行（poster 处理/sourceId/year）", () => {
+      const rows = api.mapMovieRows([MOVIE_BASIC]);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).toBe("101");
+      expect(rows[0].source).toBe("src1");
+      expect(rows[0].poster).toBe("http://s/api/cover?url=p.jpg&source=src1");
+      expect(rows[0].year).toBe("2024");
+      expect(rows[0].episodes).toEqual([]);
+    });
+  });
+
   describe("getApiSources", () => {
     it("/api/sources → ApiSite[]", async () => {
       (global.fetch as jest.Mock).mockResolvedValue(

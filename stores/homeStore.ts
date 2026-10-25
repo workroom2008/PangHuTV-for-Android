@@ -21,59 +21,19 @@ export type RowItem = (SearchResult | PlayRecord) & {
 
 export interface Category {
   title: string;
-  type?: "movie" | "tv" | "record";
+  kind: "record" | "daily" | "pid";
+  pid?: number;
+  // 保留可选字段：index.tsx 的 tag chips 行为兼容（胖虎分类下恒为空）
   tag?: string;
   tags?: string[];
 }
 
 const initialCategories: Category[] = [
-  { title: "最近播放", type: "record" },
-  { title: "热门剧集", type: "tv", tag: "热门" },
-  { title: "电视剧", type: "tv", tags: ["国产剧", "美剧", "英剧", "韩剧", "日剧", "港剧", "日本动画", "动画"] },
-  {
-    title: "电影",
-    type: "movie",
-    tags: [
-      "热门",
-      "最新",
-      "经典",
-      "豆瓣高分",
-      "冷门佳片",
-      "华语",
-      "欧美",
-      "韩国",
-      "日本",
-      "动作",
-      "喜剧",
-      "爱情",
-      "科幻",
-      "悬疑",
-      "恐怖",
-    ],
-  },
-  { title: "综艺", type: "tv", tag: "综艺" },
-  { title: "豆瓣 Top250", type: "movie", tag: "top250" },
+  { title: "最近播放", kind: "record" },
+  { title: "每日更新", kind: "daily" },
 ];
 
-// 添加缓存项接口
-interface CacheItem {
-  data: RowItem[];
-  timestamp: number;
-  type: 'movie' | 'tv' | 'record';
-  hasMore: boolean;
-}
-
-const CACHE_EXPIRE_TIME = 5 * 60 * 1000; // 5分钟过期
-const MAX_CACHE_SIZE = 10; // 最大缓存容量
-const MAX_ITEMS_PER_CACHE = 40; // 每个缓存最大条目数
-
-const getCacheKey = (category: Category) => {
-  return `${category.type || 'unknown'}-${category.title}-${category.tag || ''}`;
-};
-
-const isValidCache = (cacheItem: CacheItem) => {
-  return Date.now() - cacheItem.timestamp < CACHE_EXPIRE_TIME;
-};
+const PAGE_SIZE = 20;
 
 interface HomeState {
   categories: Category[];
@@ -84,15 +44,13 @@ interface HomeState {
   pageStart: number;
   hasMore: boolean;
   error: string | null;
+  navLoaded: boolean;
   fetchInitialData: () => Promise<void>;
   loadMoreData: () => Promise<void>;
   selectCategory: (category: Category) => void;
   refreshPlayRecords: () => Promise<void>;
   clearError: () => void;
 }
-
-// 内存缓存，应用生命周期内有效
-const dataCache = new Map<string, CacheItem>();
 
 const useHomeStore = create<HomeState>((set, get) => ({
   categories: initialCategories,
@@ -103,32 +61,22 @@ const useHomeStore = create<HomeState>((set, get) => ({
   pageStart: 0,
   hasMore: true,
   error: null,
+  navLoaded: false,
 
   fetchInitialData: async () => {
     const { apiBaseUrl } = useSettingsStore.getState();
     await useAuthStore.getState().checkLoginStatus(apiBaseUrl);
 
-    const { selectedCategory } = get();
-    const cacheKey = getCacheKey(selectedCategory);
-
-    // 最近播放不缓存，始终实时获取
-    if (selectedCategory.type === 'record') {
-      set({ loading: true, contentData: [], pageStart: 0, hasMore: true, error: null });
-      await get().loadMoreData();
-      return;
-    }
-
-    // 检查缓存
-    if (dataCache.has(cacheKey) && isValidCache(dataCache.get(cacheKey)!)) {
-      const cachedData = dataCache.get(cacheKey)!;
-      set({
-        loading: false,
-        contentData: cachedData.data,
-        pageStart: cachedData.data.length,
-        hasMore: cachedData.hasMore,
-        error: null
-      });
-      return;
+    // 首次加载时注入胖虎导航大类（电视剧/电影/...）
+    if (!get().navLoaded) {
+      try {
+        const navs = await api.getNavCategories();
+        const pidCats: Category[] = navs.map((n) => ({ title: n.name, kind: "pid", pid: n.pid }));
+        set({ categories: [...initialCategories, ...pidCats], navLoaded: true });
+      } catch (e) {
+        // 导航大类拉取失败不阻塞首页，仍可用 最近播放/每日更新
+        set({ navLoaded: true });
+      }
     }
 
     set({ loading: true, contentData: [], pageStart: 0, hasMore: true, error: null });
@@ -144,7 +92,7 @@ const useHomeStore = create<HomeState>((set, get) => ({
     }
 
     try {
-      if (selectedCategory.type === "record") {
+      if (selectedCategory.kind === "record") {
         const { isLoggedIn } = useAuthStore.getState();
         if (!isLoggedIn) {
           set({ contentData: [], hasMore: false });
@@ -167,83 +115,25 @@ const useHomeStore = create<HomeState>((set, get) => ({
               play_time: record.play_time,
             };
           })
-          // .filter((record) => record.progress !== undefined && record.progress > 0 && record.progress < 1)
           .sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0));
 
         set({ contentData: rowItems, hasMore: false });
-      } else if (selectedCategory.type && selectedCategory.tag) {
-        const result = await api.getDoubanData(
-          selectedCategory.type,
-          selectedCategory.tag,
-          20,
-          pageStart
-        );
-
-        const newItems = result.list.map((item) => ({
-          ...item,
-          id: item.title,
-          source: "douban",
-        })) as RowItem[];
-
-        const cacheKey = getCacheKey(selectedCategory);
-
-        if (pageStart === 0) {
-          // 清理过期缓存
-          for (const [key, value] of dataCache.entries()) {
-            if (!isValidCache(value)) {
-              dataCache.delete(key);
-            }
-          }
-
-          // 如果缓存太大，删除最旧的项
-          if (dataCache.size >= MAX_CACHE_SIZE) {
-            const oldestKey = Array.from(dataCache.keys())[0];
-            dataCache.delete(oldestKey);
-          }
-
-          // 限制缓存的数据条目数，但不限制显示的数据
-          const cacheItems = newItems.slice(0, MAX_ITEMS_PER_CACHE);
-
-          // 存储新缓存
-          dataCache.set(cacheKey, {
-            data: cacheItems,
-            timestamp: Date.now(),
-            type: selectedCategory.type,
-            hasMore: true // 始终为 true，因为我们允许继续加载
-          });
-
-          set({
-            contentData: newItems, // 使用完整的新数据
-            pageStart: newItems.length,
-            hasMore: result.list.length !== 0,
-          });
-        } else {
-          // 增量加载时更新缓存
-          const existingCache = dataCache.get(cacheKey);
-          if (existingCache) {
-            // 只有当缓存数据少于最大限制时才更新缓存
-            if (existingCache.data.length < MAX_ITEMS_PER_CACHE) {
-              const updatedData = [...existingCache.data, ...newItems];
-              const limitedCacheData = updatedData.slice(0, MAX_ITEMS_PER_CACHE);
-
-              dataCache.set(cacheKey, {
-                ...existingCache,
-                data: limitedCacheData,
-                hasMore: true // 始终为 true，因为我们允许继续加载
-              });
-            }
-          }
-
-          // 更新状态时使用所有数据
-          set((state) => ({
-            contentData: [...state.contentData, ...newItems],
-            pageStart: state.pageStart + newItems.length,
-            hasMore: result.list.length !== 0,
-          }));
-        }
-      } else if (selectedCategory.tags) {
-        // It's a container category, do not load content, but clear current content
-        set({ contentData: [], hasMore: false });
+      } else if (selectedCategory.kind === "daily") {
+        const current = Math.floor(pageStart / PAGE_SIZE) + 1;
+        const rows = await api.getDailyUpdates(0, current, PAGE_SIZE);
+        set((state) => ({
+          contentData: current === 1 ? rows : [...state.contentData, ...rows],
+          pageStart: pageStart + rows.length,
+          hasMore: rows.length > 0,
+        }));
+      } else if (selectedCategory.kind === "pid" && selectedCategory.pid != null) {
+        const current = Math.floor(pageStart / PAGE_SIZE) + 1;
+        const rows = await api.getClassifyPage(selectedCategory.pid, { current });
+        set((state) => ({
+          contentData: current === 1 ? rows : [...state.contentData, ...rows],
+          pageStart: pageStart + rows.length,
+          hasMore: rows.length > 0,
+        }));
       } else {
         set({ hasMore: false });
       }
@@ -276,37 +166,16 @@ const useHomeStore = create<HomeState>((set, get) => ({
 
   selectCategory: (category: Category) => {
     const currentCategory = get().selectedCategory;
-    const cacheKey = getCacheKey(category);
 
-    if (currentCategory.title !== category.title || currentCategory.tag !== category.tag) {
+    if (currentCategory.title !== category.title || currentCategory.kind !== category.kind) {
       set({
         selectedCategory: category,
         contentData: [],
         pageStart: 0,
         hasMore: true,
-        error: null
+        error: null,
       });
-
-      if (category.type === 'record') {
-        get().fetchInitialData();
-        return;
-      }
-
-      const cachedData = dataCache.get(cacheKey);
-      if (cachedData && isValidCache(cachedData)) {
-        set({
-          contentData: cachedData.data,
-          pageStart: cachedData.data.length,
-          hasMore: cachedData.hasMore,
-          loading: false
-        });
-      } else {
-        // 删除过期缓存
-        if (cachedData) {
-          dataCache.delete(cacheKey);
-        }
-        get().fetchInitialData();
-      }
+      get().fetchInitialData();
     }
   },
 
@@ -319,10 +188,10 @@ const useHomeStore = create<HomeState>((set, get) => ({
     const { isLoggedIn } = useAuthStore.getState();
     if (!isLoggedIn) {
       set((state) => {
-        const recordCategoryExists = state.categories.some((c) => c.type === "record");
+        const recordCategoryExists = state.categories.some((c) => c.kind === "record");
         if (recordCategoryExists) {
-          const newCategories = state.categories.filter((c) => c.type !== "record");
-          if (state.selectedCategory.type === "record") {
+          const newCategories = state.categories.filter((c) => c.kind !== "record");
+          if (state.selectedCategory.kind === "record") {
             get().selectCategory(newCategories[0] || null);
           }
           return { categories: newCategories };
@@ -334,13 +203,13 @@ const useHomeStore = create<HomeState>((set, get) => ({
     const records = await PlayRecordManager.getAll();
     const hasRecords = Object.keys(records).length > 0;
     set((state) => {
-      const recordCategoryExists = state.categories.some((c) => c.type === "record");
+      const recordCategoryExists = state.categories.some((c) => c.kind === "record");
       if (hasRecords && !recordCategoryExists) {
         return { categories: [initialCategories[0], ...state.categories] };
       }
       if (!hasRecords && recordCategoryExists) {
-        const newCategories = state.categories.filter((c) => c.type !== "record");
-        if (state.selectedCategory.type === "record") {
+        const newCategories = state.categories.filter((c) => c.kind !== "record");
+        if (state.selectedCategory.kind === "record") {
           get().selectCategory(newCategories[0] || null);
         }
         return { categories: newCategories };

@@ -83,18 +83,6 @@ export async function panghuFetch(
 // endregion
 
 // region: --- Interface Definitions ---
-export interface DoubanItem {
-  title: string;
-  poster: string;
-  rate?: string;
-}
-
-export interface DoubanResponse {
-  code: number;
-  message: string;
-  list: DoubanItem[];
-}
-
 export interface VideoDetail {
   id: string;
   title: string;
@@ -290,16 +278,42 @@ export class API {
     return url;
   }
 
-  /** 豆瓣数据（Task 5 换成胖虎首页后删除） */
-  async getDoubanData(
-    type: "movie" | "tv",
-    tag: string,
-    pageSize: number = 16,
-    pageStart: number = 0
-  ): Promise<DoubanResponse> {
-    const url = `/api/douban?type=${type}&tag=${encodeURIComponent(tag)}&pageSize=${pageSize}&pageStart=${pageStart}`;
-    const data = await panghuFetch(this.baseURL, url, {});
-    return data as DoubanResponse;
+  /** 胖虎导航大类（pid=0 顶级，show 过滤） */
+  async getNavCategories(): Promise<{ pid: number; name: string }[]> {
+    const data = await panghuFetch(this.baseURL, "/api/navCategory");
+    return ((data || []) as any[])
+      .filter((c) => c.pid === 0 && c.show !== false)
+      .map((c) => ({ pid: Number(c.id), name: String(c.name ?? "") }));
+  }
+
+  /** 列表行映射（MovieBasicInfo → SearchResult） */
+  mapMovieRows(list: any[]): SearchResult[] {
+    const nameMap = new Map<string, string>();
+    return (list || []).map((item) => this.mapMovieBasicToSearchResult(item, nameMap));
+  }
+
+  /** 每日更新 */
+  async getDailyUpdates(pid: number, current: number, pageSize: number): Promise<SearchResult[]> {
+    const url = `/api/dailyUpdates?pid=${pid}&current=${current}&pageSize=${pageSize}`;
+    const data = await panghuFetch(this.baseURL, url);
+    return this.mapMovieRows(data?.list || []);
+  }
+
+  /** 分类筛选页 */
+  async getClassifyPage(
+    pid: number,
+    opts: { category?: string; area?: string; year?: string; current?: number; pageSize?: number }
+  ): Promise<SearchResult[]> {
+    const params = new URLSearchParams({
+      Pid: String(pid),
+      current: String(opts.current ?? 1),
+      pageSize: String(opts.pageSize ?? 20),
+    });
+    if (opts.category) params.set("Category", opts.category);
+    if (opts.area) params.set("Area", opts.area);
+    if (opts.year) params.set("Year", opts.year);
+    const data = await panghuFetch(this.baseURL, `/api/filmClassifySearch?${params.toString()}`);
+    return this.mapMovieRows(data?.list || []);
   }
 
   /** 启用采集源列表 */
