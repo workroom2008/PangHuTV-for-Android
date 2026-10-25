@@ -148,9 +148,13 @@ export default function PlayScreen() {
 
     return () => {
       logger.info(`[PERF] PlayScreen unmounting - calling reset()`);
-      // 退出播放页就把 detail 标记为不可复用：卡死/闪退后再次打开同一部片时，
-      // 会重新 init 拿新直链，而不是拿上次那套已经失效的地址播放失败。
-      usePlayerStore.getState().markStale();
+      // 这里不要再调 markStale()。
+      //
+      // 之前的实现无条件标记，导致每次进播放页 _forceReloadOnEnter 都为 true
+      // -> needsDetailInit 恒为 true -> 每次都重新 init 拉 filmPlayInfo。
+      // 18AV/四虎 是播时解链，filmPlayInfo 要 4s+，于是表现为
+      // "正在加载视频 -> 进度条回退 -> 再加载"的循环（极品/115 有缓存所以看不出）。
+      // 真正需要重拉的是"播放出错"场景，那个由 handleVideoError 负责标记。
       reset(); // Reset state when component unmounts
     };
   }, [episodeIndex, source, position, setVideoRef, reset, loadVideo, id, title]);

@@ -1,4 +1,4 @@
-import { useCallback, RefObject, useMemo, useRef } from 'react';
+import { useCallback, RefObject, useMemo, useRef, useEffect } from 'react';
 import { Video, ResizeMode } from 'expo-av';
 import Toast from 'react-native-toast-message';
 import usePlayerStore from '@/stores/playerStore';
@@ -24,7 +24,17 @@ export const useVideoHandlers = ({
   deviceType,
   detail,
 }: UseVideoHandlersProps) => {
-  
+  /** 解码器崩溃原地重试计数：换集/换源时清零，避免无限重试 */
+  const decoderRetryCountRef = useRef(0);
+  const lastUrlRef = useRef<string>("");
+
+  useEffect(() => {
+    if (currentEpisode?.url !== lastUrlRef.current) {
+      lastUrlRef.current = currentEpisode?.url ?? "";
+      decoderRetryCountRef.current = 0;
+    }
+  }, [currentEpisode?.url]);
+
   const onLoad = useCallback(async () => {
     console.info(`[PERF] Video onLoad - video ready to play`);
     
@@ -71,7 +81,34 @@ export const useVideoHandlers = ({
     const isNetworkError = errorString.includes('HttpDataSourceException') ||
                          errorString.includes('IOException') ||
                          errorString.includes('SocketTimeoutException');
-    
+
+    // 解码器崩溃（老 TV 的 OMX.MS.AVC.Decoder 常见）：
+    //   j7.g: Decoder failed / IllegalStateException @ native_dequeueOutputBuffer
+    //   Disable failed / IllegalStateException @ native_flush
+    // 这种错误换播放源没有用（同一个硬解码器），而原来一律走 handleVideoError
+    // -> 切源 -> 重新 init(拉 filmPlayInfo 4s+) -> 又崩溃，表现为
+    // "加载 -> 进度条回退 -> 再加载" 死循环（18AV / 四虎 就是这样）。
+    // 这里改成：原地 seek 到当前稍前位置重试一次，重置解码器但不重拉列表。
+    const isDecoderError =
+      errorString.includes('Decoder failed') ||
+      errorString.includes('MediaCodec') ||
+      errorString.includes('native_dequeueOutputBuffer') ||
+      errorString.includes('native_flush');
+
+    if (isDecoderError && decoderRetryCountRef.current < 1) {
+      decoderRetryCountRef.current += 1;
+      console.warn(`[DECODER_RETRY] 解码器异常，原地重试第 ${decoderRetryCountRef.current} 次`);
+      const store = usePlayerStore.getState();
+      const pos = (store.status as any)?.positionMillis ?? 0;
+      const target = Math.max(0, pos - 1000);
+      setTimeout(() => {
+        store.videoRef?.current
+          ?.playFromPositionAsync?.(target)
+          .catch(() => {});
+      }, 500);
+      return;
+    }
+
     if (isSSLError) {
       console.error(`[SSL_ERROR] SSL certificate validation failed for URL: ${currentEpisode.url}`);
       Toast.show({ 
