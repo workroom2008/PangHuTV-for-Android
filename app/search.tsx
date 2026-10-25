@@ -83,6 +83,23 @@ export default function SearchScreen() {
 
   const onSearchPress = () => handleSearch();
 
+  // 热门搜索词（胖虎 /api/hotKeywords，失败静默为空）
+  const [hotKeywords, setHotKeywords] = useState<string[]>([]);
+  useEffect(() => {
+    let mounted = true;
+    api.getHotKeywords(10).then((words) => {
+      if (mounted) setHotKeywords(words);
+    }).catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleHotKeywordPress = (word: string) => {
+    setKeyword(word);
+    handleSearch(word);
+  };
+
   const handleQrPress = () => {
     if (!remoteInputEnabled) {
       Alert.alert("远程输入未启用", "请先在设置页面中启用远程输入功能", [
@@ -144,6 +161,20 @@ export default function SearchScreen() {
           </StyledButton>
         )}
       </View>
+
+      {hotKeywords.length > 0 && (
+        <View style={dynamicStyles.hotKeywordsRow}>
+          {hotKeywords.map((word) => (
+            <TouchableOpacity
+              key={word}
+              style={dynamicStyles.hotKeywordChip}
+              onPress={() => handleHotKeywordPress(word)}
+            >
+              <ThemedText style={dynamicStyles.hotKeywordText}>{word}</ThemedText>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {loading ? (
         <VideoLoadingAnimation showProgressBar={false} />
@@ -234,6 +265,25 @@ const createResponsiveStyles = (deviceType: string, spacing: number) => {
       color: "red",
       fontSize: isMobile ? 14 : 16,
       textAlign: "center",
+    },
+    hotKeywordsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      paddingHorizontal: spacing,
+      marginBottom: spacing / 2,
+      gap: spacing / 2,
+    },
+    hotKeywordChip: {
+      paddingHorizontal: spacing,
+      paddingVertical: spacing / 3,
+      borderRadius: 16,
+      backgroundColor: "#2c2c2e",
+      borderWidth: 1,
+      borderColor: "#555",
+    },
+    hotKeywordText: {
+      color: "#ccc",
+      fontSize: isMobile ? 13 : 15,
     },
   });
 };

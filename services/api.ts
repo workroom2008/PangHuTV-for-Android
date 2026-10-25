@@ -278,6 +278,16 @@ export class API {
     return url;
   }
 
+  /** 热门搜索词（失败静默返回空数组） */
+  async getHotKeywords(limit = 10): Promise<string[]> {
+    try {
+      const data = await panghuFetch(this.baseURL, `/api/hotKeywords?limit=${limit}`);
+      return ((data || []) as any[]).map((w) => String(w));
+    } catch {
+      return [];
+    }
+  }
+
   /** 胖虎导航大类（pid=0 顶级，show 过滤） */
   async getNavCategories(): Promise<{ pid: number; name: string }[]> {
     const data = await panghuFetch(this.baseURL, "/api/navCategory");
