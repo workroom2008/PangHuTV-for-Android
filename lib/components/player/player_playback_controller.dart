@@ -4,7 +4,6 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:media_kit/src/player/native/player/real.dart' show NativePlayer;
 import 'package:media_kit_video/media_kit_video.dart';
 import '../../api/http_client.dart';
 import '../../utils/playback_url.dart';
@@ -187,6 +186,20 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
         s.contains('Decoder');
   }
 
+  /// 设置 libmpv 原生属性（仅 NativePlayer 支持，Web 端无此能力）。
+  ///
+  /// 用 dynamic 调用而非深度 import `media_kit/src/...`：
+  /// 后者是包私有实现，升级时路径可能变动，且触发 implementation_imports 告警。
+  /// 这里只做尽力而为，失败静默忽略（不影响播放主流程）。
+  static Future<void> _setMpvProperty(Player p, String key, String value) async {
+    try {
+      final platform = p.platform;
+      if (platform == null) return;
+      final dyn = platform as dynamic;
+      await dyn.setProperty(key, value);
+    } catch (_) {}
+  }
+
   /// 测试环境（flutter test）没有 libmpv 原生库，创建 Player 会挂起并遗留定时器。
   /// 这里在测试时短路，让 widget 测试只验证 UI 状态机，不触碰真实播放内核。
   static bool get _isTestEnv {
@@ -260,15 +273,18 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
       newPlayer = Player();
       // 硬解优先、失败自动回落软解：libmpv 的 hwdec=auto-safe 在设备不支持
       // 该分辨率/编码时会自己退回软解，无需应用层重试（ExoPlayer 做不到这点）。
-      // setProperty 仅在 NativePlayer 暴露，Web 端不支持，故做平台判断。
-      final nativePlayer = newPlayer.platform;
-      if (nativePlayer is NativePlayer) {
-        try {
-          await nativePlayer.setProperty('hwdec', 'auto-safe');
-          // 网络抖动时多等一会，避免大分片被误判为加载失败。
-          await nativePlayer.setProperty('network-timeout', '30');
-        } catch (_) {}
-      }
+      // 硬解优先、失败自动回落软解：libmpv 的 hwdec=auto-safe 在设备不支持
+      // 该分辨率/编码时会自己退回软解，无需应用层重试（ExoPlayer 做不到这点）。
+      await _setMpvProperty(newPlayer, 'hwdec', 'auto-safe');
+      // 服务端 /api/hls 在 client=tv 下会把分片重写成**相对路径**的代理地址
+      // （/api/hls?source=...&token=...）。mpv 见播放列表里是相对引用就按
+      // "unsafe playlist" 拒绝加载，报：
+      //   Use the --load-unsafe-playlists option to load it anyway.
+      // 这些播放列表来自我们自己的服务端，条目也是自己生成的分片代理，
+      // 因此放开该限制是安全且必要的。
+      await _setMpvProperty(newPlayer, 'load-unsafe-playlists', 'yes');
+      // 网络抖动时多等一会，避免大分片被误判为加载失败。
+      await _setMpvProperty(newPlayer, 'network-timeout', '30');
       final videoController = VideoController(newPlayer);
 
       if (sessionId != _initSessionId) {
