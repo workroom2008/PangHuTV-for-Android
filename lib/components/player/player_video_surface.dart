@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'player_scale.dart';
 import '../../utils/format_util.dart';
 
 /// 播放器视频渲染画面与海报层，对齐 OHOS `PlayerVideoLayer.ets`
+///
+/// 渲染内核为 media_kit_video（libmpv 纹理），替代原先的 video_player。
 class PlayerVideoSurface extends StatelessWidget {
-  final VideoPlayerController? controller;
+  final VideoController? controller;
   final PlayerScaleMode scaleMode;
   final String poster;
   final bool isOpening;
   final bool isReady;
+
+  /// libmpv 渲染出的视频宽高（由播放器状态层提供，0 表示尚未就绪）。
+  final double videoWidth;
+  final double videoHeight;
 
   const PlayerVideoSurface({
     super.key,
@@ -18,22 +24,26 @@ class PlayerVideoSurface extends StatelessWidget {
     required this.poster,
     this.isOpening = false,
     this.isReady = false,
+    this.videoWidth = 0,
+    this.videoHeight = 0,
   });
 
-  Widget _buildVideo(VideoPlayerController c) {
-    final size = c.value.size;
-    final rot = c.value.rotationCorrection;
-    final isRotated = rot == 90 || rot == 270;
-    final w = isRotated ? size.height : size.width;
-    final h = isRotated ? size.width : size.height;
-    final effectiveW = w > 0 ? w : 16.0;
-    final effectiveH = h > 0 ? h : 9.0;
-    final aspect = (w > 0 && h > 0) ? (w / h) : (c.value.aspectRatio > 0 ? c.value.aspectRatio : 16 / 9);
+  Widget _buildVideo(VideoController c) {
+    final w = videoWidth > 0 ? videoWidth : 16.0;
+    final h = videoHeight > 0 ? videoHeight : 9.0;
+    final aspect = (videoWidth > 0 && videoHeight > 0) ? (videoWidth / videoHeight) : (16 / 9);
+    final video = Video(
+      controller: c,
+      key: ValueKey(c),
+      // 画面比例交给外层容器控制，避免 libmpv 自带 letterbox 与 FittedBox 冲突。
+      controls: NoVideoControls,
+      fit: BoxFit.fill,
+    );
     if (scaleMode == PlayerScaleMode.fit) {
       return Center(
         child: AspectRatio(
           aspectRatio: aspect,
-          child: VideoPlayer(c, key: ValueKey(c)),
+          child: video,
         ),
       );
     }
@@ -42,9 +52,9 @@ class PlayerVideoSurface extends StatelessWidget {
         fit: PlayerScale.boxFit(scaleMode),
         clipBehavior: Clip.hardEdge,
         child: SizedBox(
-          width: effectiveW,
-          height: effectiveH,
-          child: VideoPlayer(c, key: ValueKey(c)),
+          width: w,
+          height: h,
+          child: video,
         ),
       ),
     );
@@ -53,13 +63,9 @@ class PlayerVideoSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = controller;
-    final hasInitializedVideo = c != null && c.value.isInitialized;
-    // 画面活跃中（已在播放或已有有效帧进度）时强制隐藏海报，避免视频画面透出与海报并存
-    final isVideoActive = hasInitializedVideo && (c.value.isPlaying || c.value.position > Duration.zero);
+    final hasInitializedVideo = c != null && isReady;
     // 对齐 OHOS `if (this.poster && (!this.ready || this.opening))`：未就绪或打开中展示完整封面
-    final showPoster = poster.isNotEmpty &&
-        !isVideoActive &&
-        (!isReady || isOpening || !hasInitializedVideo);
+    final showPoster = poster.isNotEmpty && (!isReady || isOpening);
 
     return Container(
       color: Colors.black,

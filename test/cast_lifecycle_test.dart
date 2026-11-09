@@ -143,7 +143,7 @@ void main() {
       final ctrl = PlayerPlaybackController();
       ctrl.parkForCast();
 
-      expect(ctrl.controller, isNull);
+      expect(ctrl.videoController, isNull);
       expect(ctrl.isPlaying, isFalse);
       expect(ctrl.isBuffering, isFalse);
       expect(ctrl.isOpening, isFalse);
@@ -162,7 +162,7 @@ void main() {
       final ctrl = PlayerPlaybackController();
       ctrl.pauseLocal();
       ctrl.resumeLocal(42, true);
-      expect(ctrl.controller, isNull);
+      expect(ctrl.videoController, isNull);
       expect(ctrl.isOpening, isFalse);
       expect(ctrl.isPlaying, isTrue);
       expect(ctrl.playRequested, isTrue);
@@ -171,7 +171,7 @@ void main() {
     test('remountCompleted sets isCompleted and duration without playing', () {
       final ctrl = PlayerPlaybackController();
       ctrl.remountCompleted(100.0, 100.0);
-      expect(ctrl.controller, isNull);
+      expect(ctrl.videoController, isNull);
       expect(ctrl.isCompleted, isTrue);
       expect(ctrl.isPlaying, isFalse);
       expect(ctrl.currentPosition, const Duration(seconds: 100));

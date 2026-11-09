@@ -774,7 +774,7 @@ void main() {
     testWidgets('PlayerPlaybackController parkForCast releases controller and resets states', (tester) async {
       final ctrl = PlayerPlaybackController();
       ctrl.parkForCast();
-      expect(ctrl.controller, isNull);
+      expect(ctrl.videoController, isNull);
       expect(ctrl.isPlaying, isFalse);
       expect(ctrl.isBuffering, isFalse);
       expect(ctrl.isOpening, isFalse);

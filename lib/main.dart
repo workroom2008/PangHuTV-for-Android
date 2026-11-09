@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:flutter/services.dart';
 import 'common/app_branding.dart';
 import 'common/app_theme.dart';
@@ -42,6 +43,9 @@ const SystemUiOverlayStyle kDefaultSystemUiOverlayStyle = SystemUiOverlayStyle(
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // libmpv 播放内核必须在 runApp 之前初始化，否则首个播放页会因内核未就绪报错。
+  MediaKit.ensureInitialized();
 
   // 沉浸式透明状态栏与边缘到边缘布局，透明导航条并禁用系统浅色强制对比度遮罩
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
