@@ -34,6 +34,10 @@ class ExternalPlayer {
   }
 
   /// 成功打开返回 true；无可用地址或无法调起返回 false。
+  ///
+  /// 只走 externalNonBrowserApplication：m3u8 直链丢给浏览器只会得到浏览器播放页
+  /// （还要再点一次播放按钮，且是网页播放器加载，极慢）。内置播放失败时宁可就地
+  /// 报错让用户重试/换线路，也不要掉进浏览器。
   static Future<bool> open(String rawLink, {String? packageName}) async {
     final url = resolvePlayUrl(rawLink);
     if (url.isEmpty) return false;
@@ -57,18 +61,11 @@ class ExternalPlayer {
     final uri = Uri.tryParse(url);
     if (uri == null || !uri.hasScheme) return false;
 
-    final modes = <LaunchMode>[
-      LaunchMode.externalNonBrowserApplication,
-      LaunchMode.externalApplication,
-    ];
-    for (final mode in modes) {
-      try {
-        final ok = await launchUrl(uri, mode: mode);
-        if (ok) return true;
-      } catch (e, st) {
-        if (kDebugMode) {
-          debugPrint('ExternalPlayer launch failed ($mode): $e\n$st');
-        }
+    try {
+      return await launchUrl(uri, mode: LaunchMode.externalNonBrowserApplication);
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('ExternalPlayer launch failed: $e\n$st');
       }
     }
     return false;

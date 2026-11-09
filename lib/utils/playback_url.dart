@@ -49,34 +49,39 @@ class PlaybackUrl {
     return url;
   }
 
+  /// 需服务端 /filmPlayInfo 二次解链的占位链前缀。
+  ///
+  /// 与 server/internal/model/spider.go 的 SourceFormat 对齐：新增采集源时
+  /// 两端必须同时登记，否则占位链会被当成普通 http 链下发给播放器（表现为
+  /// 「打开超时」并落到浏览器兜底）。XPorn 采集期即解直链，不产生占位链。
+  static const List<String> _deferredPrefixes = <String>[
+    '91porna:',
+    'missav:',
+    'chigua51:',
+    'tianmei:',
+    'lissav:',
+    'sihu:',
+    'av18:',
+    'xporn:',
+    'ck69:',
+    'av591:',
+  ];
+
   /// 需服务端 /filmPlayInfo 二次解链的占位链。
   static bool isDeferredCollectLink(String link) {
     final lower = link.trim().toLowerCase();
     if (lower.isEmpty) return false;
-    return lower.startsWith('91porna:') ||
-        lower.startsWith('missav:') ||
-        lower.startsWith('chigua51:') ||
-        lower.startsWith('tianmei:') ||
-        lower.startsWith('lissav:') ||
-        lower.startsWith('sihu:') ||
-        lower.startsWith('ck69:') ||
-        lower.startsWith('av591:');
+    for (final prefix in _deferredPrefixes) {
+      if (lower.startsWith(prefix)) return true;
+    }
+    return false;
   }
 
   static bool isPlayableLink(String url) {
     final raw = url.trim();
     if (raw.isEmpty) return false;
+    if (isDeferredCollectLink(raw)) return false;
     final lower = raw.toLowerCase();
-    if (lower.startsWith('91porna:') ||
-        lower.startsWith('missav:') ||
-        lower.startsWith('chigua51:') ||
-        lower.startsWith('tianmei:') ||
-        lower.startsWith('lissav:') ||
-        lower.startsWith('sihu:') ||
-        lower.startsWith('ck69:') ||
-        lower.startsWith('av591:')) {
-      return false;
-    }
     if (lower.startsWith('http://') || lower.startsWith('https://')) {
       return true;
     }

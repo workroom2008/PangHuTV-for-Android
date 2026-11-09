@@ -274,6 +274,45 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /// 浏览器也能响应 ACTION_VIEW + video/*，会把 m3u8 打开成网页播放器
+    /// （还要再点播放键，加载极慢）。它们不是「播放器」，一律排除。
+    private val browserPackages = setOf(
+        "com.android.chrome",
+        "com.chrome.beta",
+        "com.chrome.dev",
+        "com.chrome.canary",
+        "com.google.android.webview",
+        "com.android.webview",
+        "org.mozilla.firefox",
+        "org.mozilla.firefox_beta",
+        "com.microsoft.emmx",
+        "com.opera.browser",
+        "com.opera.mini.native",
+        "com.UCMobile",
+        "com.uc.browser",
+        "com.tencent.mtt",
+        "com.tencent.mtt.x86",
+        "com.baidu.browser.inter",
+        "com.quark.browser",
+        "com.heytap.browser",
+        "com.vivo.browser",
+        "com.miui.browser",
+        "com.android.browser",
+        "com.huawei.browser",
+        "com.sec.android.app.sbrowser",
+    )
+
+    private fun isBrowserPackage(pkg: String): Boolean {
+        val lower = pkg.lowercase(Locale.getDefault())
+        if (lower in browserPackages) return true
+        // 厂商浏览器包名各异，按关键词兜底
+        return lower.contains("browser") ||
+            lower.contains("chrome") ||
+            lower.contains("webview") ||
+            lower.endsWith(".mtt") ||
+            lower.contains("firefox")
+    }
+
     private fun queryExternalVideoPlayers(): List<Map<String, String>> {
         val pm = packageManager
         val seen = linkedSetOf<String>()
@@ -293,6 +332,7 @@ class MainActivity : FlutterActivity() {
                 val info = resolve.activityInfo ?: continue
                 val pkg = info.packageName ?: continue
                 if (pkg == applicationContext.packageName) continue
+                if (isBrowserPackage(pkg)) continue
                 if (!seen.add(pkg)) continue
                 val label = resolve.loadLabel(pm)?.toString()?.trim().orEmpty()
                 out.add(mapOf("package" to pkg, "label" to (label.ifEmpty { pkg })))
@@ -315,13 +355,25 @@ class MainActivity : FlutterActivity() {
         }
         return try {
             if (packageName.isBlank()) {
-                val chooser = Intent.createChooser(intent, "选择播放器")
-                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(chooser)
+                // 未指定播放器时按候选清单过滤掉浏览器，避免把 m3u8 丢进网页播放页。
+                val candidates = queryExternalVideoPlayers()
+                when (candidates.size) {
+                    0 -> false
+                    1 -> {
+                        startActivity(Intent(intent).setPackage(candidates[0]["package"]))
+                        true
+                    }
+                    else -> {
+                        val chooser = Intent.createChooser(intent, "选择播放器")
+                        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(chooser)
+                        true
+                    }
+                }
             } else {
                 startActivity(intent)
+                true
             }
-            true
         } catch (_: Exception) {
             false
         }

@@ -59,5 +59,43 @@ void main() {
       expect(out, contains('/api/hls.m3u8'));
       expect(out, contains('client=tv'));
     });
+
+    // XPorn 采集期解直链，服务端 filmPlayInfo 把它包成 /api/hls；
+    // 未识别成延迟链时会被当普通 http 链下发，表现为打开超时掉进浏览器兜底。
+    test('XPorn 的 /api/hls 直链同样补 client=tv', () {
+      final out = PlaybackUrl.prepareForPlayer(
+        '/api/hls?source=2714683950&url=https%3A%2F%2Fc10.hs100.top%2Fx%2Findex.m3u8',
+      );
+      expect(out, contains('/api/hls.m3u8'));
+      expect(out, contains('client=tv'));
+    });
+  });
+
+  group('isDeferredCollectLink', () {
+    test('各采集源占位链都识别为延迟链', () {
+      for (final prefix in <String>[
+        '91porna:abc',
+        'missav:abc',
+        'chigua51:123',
+        'tianmei:abc',
+        'sihu:abc',
+        'av18:abc',
+        'xporn:abc',
+      ]) {
+        expect(PlaybackUrl.isDeferredCollectLink(prefix), isTrue, reason: prefix);
+        expect(PlaybackUrl.isPlayableLink(prefix), isFalse, reason: prefix);
+      }
+    });
+
+    test('普通 http/m3u8 直链不是延迟链', () {
+      expect(
+        PlaybackUrl.isDeferredCollectLink('https://c10.hs100.top/a/index.m3u8'),
+        isFalse,
+      );
+      expect(
+        PlaybackUrl.isPlayableLink('https://c10.hs100.top/a/index.m3u8'),
+        isTrue,
+      );
+    });
   });
 }
