@@ -127,6 +127,9 @@ class PlayerBottomBar extends StatefulWidget {
   final VoidCallback onToggleMute;
   final VoidCallback onSpeed;
   final VoidCallback? onScale;
+
+  /// 音轨弹层入口；null 表示当前源只有一条音轨（或无音轨），不显示按钮。
+  final VoidCallback? onAudioTrack;
   final ValueChanged<Duration>? onSeekStart;
   final ValueChanged<Duration>? onSeekProgress;
   final ValueChanged<Duration>? onSeekEnd;
@@ -155,6 +158,7 @@ class PlayerBottomBar extends StatefulWidget {
     required this.onToggleMute,
     required this.onSpeed,
     this.onScale,
+    this.onAudioTrack,
     this.onSeekStart,
     this.onSeekProgress,
     this.onSeekEnd,
@@ -278,6 +282,12 @@ class _PlayerBottomBarState extends State<PlayerBottomBar> {
                       ),
                       child: Text(widget.scaleLabel, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                     ),
+                  ),
+                if (widget.onAudioTrack != null)
+                  IconButton(
+                    icon: const Icon(Icons.audiotrack_rounded, color: Colors.white, size: 20),
+                    onPressed: widget.onAudioTrack,
+                    tooltip: '音轨',
                   ),
                 IconButton(
                   icon: Icon(widget.muted ? Icons.volume_off_rounded : Icons.volume_up_rounded, color: Colors.white, size: 20),

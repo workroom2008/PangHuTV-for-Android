@@ -28,6 +28,7 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
   StreamSubscription<Duration>? _durationSub;
   StreamSubscription<String>? _errorSub;
   StreamSubscription<void>? _completedSub;
+  StreamSubscription<Tracks>? _tracksSub;
 
   /// 供渲染层使用：media_kit 的 VideoController。
   Player? get player => _player;
@@ -84,6 +85,20 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
   bool _hasSeekedInitial = false;
   int _lastPersistMs = 0;
 
+  /// 可用音轨（不含 mpv 的 auto/no 伪轨）。
+  List<AudioTrack> _audioTracks = const <AudioTrack>[];
+  List<AudioTrack> get audioTracks => _audioTracks;
+
+  /// 当前选中的音轨 id；空串表示未选中/未知。
+  String _currentAudioId = '';
+  String get currentAudioId => _currentAudioId;
+
+  /// 是否已经做过一次"无音轨自动纠正"，避免用户主动选"关闭声音"后被强行改回。
+  bool _audioTrackAutoFixed = false;
+
+  /// 音轨变化时是否要通知 UI（避免 position 每 100ms 刷新都触发界面重建）。
+  bool _audioListDirty = false;
+
   VoidCallback? onEnded;
   void Function(double current, double duration)? onProgress;
   VoidCallback? onStateChanged;
@@ -115,12 +130,18 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     _durationSub?.cancel();
     _errorSub?.cancel();
     _completedSub?.cancel();
+    _tracksSub?.cancel();
     _playingSub = null;
     _bufferingSub = null;
     _positionSub = null;
     _durationSub = null;
     _errorSub = null;
     _completedSub = null;
+    _tracksSub = null;
+    _audioTracks = const <AudioTrack>[];
+    _currentAudioId = '';
+    _audioTrackAutoFixed = false;
+    _audioListDirty = false;
     final p = _player;
     _player = null;
     _videoController = null;
@@ -372,6 +393,7 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     _completedSub = p.stream.completed.listen((done) {
       if (done) _onPlayerUpdate();
     });
+    _tracksSub = p.stream.tracks.listen(_handleTracks);
     _errorSub = p.stream.error.listen((msg) {
       if (msg.trim().isEmpty) return;
       _handleInitFailure(_initSessionId, msg);
@@ -381,11 +403,21 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
   void _onPlayerUpdate() {
     final p = _player;
     if (p == null) return;
-    final playing = p.state.playing;
     final buffering = p.state.buffering;
     final pos = p.state.position;
     final dur = p.state.duration;
     final completed = dur.inSeconds > 0 && pos >= dur && !buffering;
+
+    // 音轨就绪比首帧早：libmpv 一打开 http 播放列表就会发 ffmpeg 日志更新 track-list，
+    // 用这个时机把 _isOpening 放掉，否则会白等满 30s 的打开超时。
+    if (_audioTracks.isNotEmpty && _isOpening) _isOpening = false;
+    if (_audioListDirty) {
+      _audioListDirty = false;
+      notifyListeners();
+      onStateChanged?.call();
+    }
+
+    final playing = p.state.playing;
 
     if ((playing || pos > Duration.zero) && _isOpening) _isOpening = false;
     if (_isDragging || _isSeeking) {
@@ -429,6 +461,7 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     }
   }
 
+  /// 播放中播完落点或正常播放时，自动隐藏 HUD。
   void armHideHud() {
     watcher.armHide(() {
       if (_isPlaying && !_isCompleted && _panState.kind == PlayerTipKind.none && !_isDragging) {
@@ -436,6 +469,57 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
         notifyListeners();
       }
     }, canHide: _isPlaying && !_isCompleted && _errorText.isEmpty && !_isDragging);
+  }
+
+  /// 音轨列表更新（含 mpv 的 auto/no 伪轨，需过滤）。
+  void _handleTracks(Tracks tracks) {
+    final real = tracks.audio.where((t) => t.id != 'auto' && t.id != 'no').toList(growable: false);
+    final selected = _player?.state.track.audio.id ?? '';
+    final currentId = (selected == 'auto' || selected == 'no') ? '' : selected;
+
+    final changed = real.length != _audioTracks.length ||
+        (real.isNotEmpty && _audioTracks.isNotEmpty && real.first.id != _audioTracks.first.id) ||
+        currentId != _currentAudioId;
+    _audioTracks = real;
+    _currentAudioId = currentId;
+    if (changed) _audioListDirty = true;
+
+    // 兜底 C：mpv 落到 aid=no（无音轨选中）时自动纠正一次。
+    // 只纠正一次：用户之后主动选"关闭"不再被强行改回。
+    if (!_audioTrackAutoFixed && currentId.isEmpty && real.length == 1) {
+      _audioTrackAutoFixed = true;
+      selectAudioTrack(real.first.id);
+    }
+  }
+
+  /// 手动切换音轨（弹层选择）。id 为空表示不动作。
+  Future<void> selectAudioTrack(String id) async {
+    final p = _player;
+    if (p == null || id.trim().isEmpty) return;
+    AudioTrack? target;
+    for (final t in _audioTracks) {
+      if (t.id == id) {
+        target = t;
+        break;
+      }
+    }
+    if (target == null) return;
+    try {
+      await p.setAudioTrack(target);
+      _currentAudioId = target.id;
+      showTransient(PlayerPanState(kind: PlayerTipKind.volume, text: '音轨：${audioTrackLabel(target)}'));
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// 音轨显示名：优先标题，其次语言，最后「音轨 N」。
+  String audioTrackLabel(AudioTrack t) {
+    final title = (t.title ?? '').trim();
+    if (title.isNotEmpty) return title;
+    final lang = (t.language ?? '').trim();
+    if (lang.isNotEmpty && lang != 'und') return lang;
+    final idx = _audioTracks.indexOf(t);
+    return idx >= 0 ? '音轨 ${idx + 1}' : '音轨';
   }
 
   void toggleHud() {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'player_gesture_handler.dart';
 import 'player_skin_view.dart';
 import 'player_speed_sheet.dart';
+import 'player_track_sheet.dart';
 import 'player_scale.dart';
 import 'player_pip_coordinator.dart';
 import 'player_video_surface.dart';
@@ -433,6 +434,15 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget>
                 },
                 onSpeed: () => PlayerSpeedSheet.show(context, _playback.currentSpeed, _playback.setSpeed),
                 onScale: _playback.cycleScale,
+                onAudioTrack: _playback.audioTracks.length > 1
+                    ? () => PlayerTrackSheet.show(
+                          context,
+                          _playback.audioTracks,
+                          _playback.currentAudioId,
+                          _playback.audioTrackLabel,
+                          _playback.selectAudioTrack,
+                        )
+                    : null,
                 onRetry: () {
                   if (!_castCtrl.isCasting) {
                     _beginPlayback(initialTime: _playback.currentPositionSec);
