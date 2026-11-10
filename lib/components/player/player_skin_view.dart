@@ -40,9 +40,6 @@ class PlayerSkinView extends StatelessWidget {
   final VoidCallback onToggleMute;
   final VoidCallback onSpeed;
   final VoidCallback? onScale;
-
-  /// 音轨弹层入口；null 表示单轨/无轨，不显示按钮。
-  final VoidCallback? onAudioTrack;
   final VoidCallback onRetry;
   final VoidCallback? onErrorDetail;
   final VoidCallback? onExternalPlay;
@@ -93,7 +90,6 @@ class PlayerSkinView extends StatelessWidget {
     required this.onToggleMute,
     required this.onSpeed,
     this.onScale,
-    this.onAudioTrack,
     required this.onRetry,
     this.onErrorDetail,
     this.onExternalPlay,
@@ -292,7 +288,6 @@ class PlayerSkinView extends StatelessWidget {
             onToggleMute: onToggleMute,
             onSpeed: onSpeed,
             onScale: onScale,
-            onAudioTrack: onAudioTrack,
             onSeekStart: onSeekStart,
             onSeekProgress: onSeekProgress,
             onSeekEnd: onSeekEnd,

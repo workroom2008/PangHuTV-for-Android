@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'player_gesture_handler.dart';
 import 'player_skin_view.dart';
 import 'player_speed_sheet.dart';
-import 'player_track_sheet.dart';
 import 'player_scale.dart';
 import 'player_pip_coordinator.dart';
 import 'player_video_surface.dart';
@@ -115,7 +114,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget>
     };
     _playback.onStateChanged = () {
       _syncAutoPip();
-      _pipCoord.updateAspectRatio(_playback.videoSize);
+      _pipCoord.updateAspectRatio(_playback.controller?.value.size);
     };
     _playback.onHardwareDecodeFailed = (url) => ExternalPlayer.open(url);
 
@@ -199,15 +198,23 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget>
       isCompleted: _playback.isCompleted,
       hasPrev: widget.hasPrev,
       hasNext: widget.hasNext,
-      videoSize: _playback.videoSize,
+      videoSize: _playback.controller?.value.size,
     );
   }
 
   bool _isPortraitVideo() {
-    final w = _playback.videoWidth;
-    final h = _playback.videoHeight;
-    if (w > 0 && h > 0) return h > w;
-    return false;
+    final c = _playback.controller;
+    if (c == null || !c.value.isInitialized) return false;
+    final size = c.value.size;
+    final rot = c.value.rotationCorrection;
+    final isRotated = rot == 90 || rot == 270;
+    final w = isRotated ? size.height : size.width;
+    final h = isRotated ? size.width : size.height;
+    if (w > 0 && h > 0) {
+      return h > w;
+    }
+    final aspect = c.value.aspectRatio;
+    return aspect > 0 && aspect < 1.0;
   }
 
   void _toggleFullscreen() {
@@ -220,7 +227,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget>
 
   void _handleManualStartPip() {
     _pipCoord.enterPip(
-      videoSize: _playback.videoSize,
+      videoSize: _playback.controller?.value.size,
       isCasting: _castCtrl.isCasting,
       isFull: widget.isFull,
       onExitFullscreen: () => widget.onFullscreenChange?.call(false, isPortrait: _isPortraitVideo()),
@@ -251,8 +258,8 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget>
   void resumeLocal(double targetSec, bool wasPlaying) {
     // 投屏选择器取消时本地播放器仍在：只 seek/play，避免 initPlayer 导致画面重载。
     // 仍在打开中也不要重挂，否则会打断进行中的 initialize。
-    final c = _playback.videoController;
-    if (c != null || _playback.isOpening) {
+    final c = _playback.controller;
+    if ((c != null && c.value.isInitialized) || _playback.isOpening) {
       _playback.resumeLocal(targetSec, wasPlaying);
     } else {
       _playback.initPlayer(widget.videoUrl, initialTime: targetSec, autoPlay: wasPlaying);
@@ -308,13 +315,11 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget>
           return Container(
             color: Colors.black,
             child: PlayerVideoSurface(
-              controller: _playback.videoController,
+              controller: _playback.controller,
               scaleMode: _playback.scaleMode,
               poster: widget.poster,
               isOpening: _playback.isOpening,
               isReady: _playback.isReady,
-              videoWidth: _playback.videoWidth,
-              videoHeight: _playback.videoHeight,
             ),
           );
         }
@@ -348,13 +353,11 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget>
                 },
                 onPanStateChange: _playback.setPanState,
                 child: PlayerVideoSurface(
-                  controller: _playback.videoController,
+                  controller: _playback.controller,
                   scaleMode: _playback.scaleMode,
                   poster: widget.poster,
                   isOpening: _playback.isOpening,
                   isReady: _playback.isReady,
-                  videoWidth: _playback.videoWidth,
-                  videoHeight: _playback.videoHeight,
                 ),
               ),
               if (_castCtrl.deviceName.isNotEmpty && !widget.isFull)
@@ -418,7 +421,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget>
                 },
                 onTogglePlay: () {
                   if (!_castCtrl.isCasting) {
-                    if (_playback.videoController == null && _playback.isCompleted) {
+                    if (_playback.controller == null && _playback.isCompleted) {
                       _playback.initPlayer(widget.videoUrl, initialTime: 0, autoPlay: true);
                     } else {
                       _playback.togglePlay();
@@ -434,15 +437,6 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget>
                 },
                 onSpeed: () => PlayerSpeedSheet.show(context, _playback.currentSpeed, _playback.setSpeed),
                 onScale: _playback.cycleScale,
-                onAudioTrack: _playback.audioTracks.length > 1
-                    ? () => PlayerTrackSheet.show(
-                          context,
-                          _playback.audioTracks,
-                          _playback.currentAudioId,
-                          _playback.audioTrackLabel,
-                          _playback.selectAudioTrack,
-                        )
-                    : null,
                 onRetry: () {
                   if (!_castCtrl.isCasting) {
                     _beginPlayback(initialTime: _playback.currentPositionSec);

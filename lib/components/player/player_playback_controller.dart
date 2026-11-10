@@ -1,10 +1,6 @@
-import 'dart:async';
-import 'dart:io' show Platform;
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
+import 'package:video_player/video_player.dart';
 import '../../api/http_client.dart';
 import '../../utils/playback_url.dart';
 import 'player_gesture_handler.dart';
@@ -14,32 +10,9 @@ import 'player_stall_watcher.dart';
 import 'player_device_control_mixin.dart';
 
 /// 播放器会话与播放状态控制器，管理生命周期、缓冲检测与控制指令
-///
-/// 播放内核为 media_kit(libmpv)，不是 video_player/ExoPlayer：
-/// 后者只走硬解，竖屏超高分辨率（XP 源 1280x2278）超出设备 MediaCodec 上限即
-/// 初始化失败，且插件不暴露 RenderersFactory 无法开启软解回退。
-/// libmpv 在硬解失败时自动回落软解，1280x2278 可正常播放。
 class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMixin {
-  Player? _player;
-  VideoController? _videoController;
-  StreamSubscription<bool>? _playingSub;
-  StreamSubscription<bool>? _bufferingSub;
-  StreamSubscription<Duration>? _positionSub;
-  StreamSubscription<Duration>? _durationSub;
-  StreamSubscription<String>? _errorSub;
-  StreamSubscription<void>? _completedSub;
-  StreamSubscription<Tracks>? _tracksSub;
-
-  /// 供渲染层使用：media_kit 的 VideoController。
-  Player? get player => _player;
-  VideoController? get videoController => _videoController;
-
-  /// 当前视频宽高（libmpv 解码后回填，未就绪时为 0）。
-  double get videoWidth => _player?.state.width?.toDouble() ?? 0;
-  double get videoHeight => _player?.state.height?.toDouble() ?? 0;
-
-  /// 兼容旧调用点：原先读 VideoPlayerController.value.size。
-  Size get videoSize => Size(videoWidth, videoHeight);
+  VideoPlayerController? _controller;
+  VideoPlayerController? get controller => _controller;
 
   bool _isPlaying = false;
   bool get isPlaying => _isPlaying;
@@ -85,27 +58,13 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
   bool _hasSeekedInitial = false;
   int _lastPersistMs = 0;
 
-  /// 可用音轨（不含 mpv 的 auto/no 伪轨）。
-  List<AudioTrack> _audioTracks = const <AudioTrack>[];
-  List<AudioTrack> get audioTracks => _audioTracks;
-
-  /// 当前选中的音轨 id；空串表示未选中/未知。
-  String _currentAudioId = '';
-  String get currentAudioId => _currentAudioId;
-
-  /// 是否已经做过一次"无音轨自动纠正"，避免用户主动选"关闭声音"后被强行改回。
-  bool _audioTrackAutoFixed = false;
-
-  /// 音轨变化时是否要通知 UI（避免 position 每 100ms 刷新都触发界面重建）。
-  bool _audioListDirty = false;
-
   VoidCallback? onEnded;
   void Function(double current, double duration)? onProgress;
   VoidCallback? onStateChanged;
   /// 内置 ExoPlayer 硬解失败且已重试后，由 UI 调起第三方播放器；返回 true 表示已成功调起。
   Future<bool> Function(String rawVideoUrl)? onHardwareDecodeFailed;
 
-  bool get isReady => _videoController != null && !_isOpening;
+  bool get isReady => _controller != null && _controller!.value.isInitialized && !_isOpening;
 
   void _safeSetWakelock(bool enable) => safeSetWakelock(enable);
 
@@ -117,37 +76,12 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     _isBuffering = false;
     _playRequested = false;
     _errorText = '视频打开超时(${PlayerStallWatcher.openTimeoutMs ~/ 1000}s)';
-    _disposePlayer();
+    final stale = _controller;
+    _controller = null;
+    stale?.removeListener(_onControllerUpdate);
+    stale?.dispose().catchError((_) {});
     notifyListeners();
     onStateChanged?.call();
-  }
-
-  /// 释放当前播放内核与所有订阅。
-  void _disposePlayer() {
-    _playingSub?.cancel();
-    _bufferingSub?.cancel();
-    _positionSub?.cancel();
-    _durationSub?.cancel();
-    _errorSub?.cancel();
-    _completedSub?.cancel();
-    _tracksSub?.cancel();
-    _playingSub = null;
-    _bufferingSub = null;
-    _positionSub = null;
-    _durationSub = null;
-    _errorSub = null;
-    _completedSub = null;
-    _tracksSub = null;
-    _audioTracks = const <AudioTrack>[];
-    _currentAudioId = '';
-    _audioTrackAutoFixed = false;
-    _audioListDirty = false;
-    final p = _player;
-    _player = null;
-    _videoController = null;
-    if (p != null) {
-      p.dispose().catchError((_) {});
-    }
   }
 
   void _handleInitFailure(int sessionId, Object e, {bool externalPlayerOpened = false}) {
@@ -190,45 +124,11 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     _handleInitFailure(sessionId, error);
   }
 
-  /// 是否为解码/渲染层错误（而非网络/地址错误）。
-  ///
-  /// libmpv 的报错文案与 ExoPlayer 不同，这里同时保留旧关键字与 mpv 常见关键字，
-  /// 便于上层仍能区分"解码失败"与"加载失败"。
   static bool _isDecoderInitError(Object e) {
     final s = e.toString();
     return s.contains('MediaCodec') ||
         s.contains('VideoError') ||
-        s.contains('MediaCodecVideoRenderer') ||
-        s.contains('Failed to open') ||
-        s.contains('could not open codec') ||
-        s.contains('No video decoder') ||
-        s.contains('hwdec') ||
-        s.contains('vo/gpu') ||
-        s.contains('Decoder');
-  }
-
-  /// 设置 libmpv 原生属性（仅 NativePlayer 支持，Web 端无此能力）。
-  ///
-  /// 用 dynamic 调用而非深度 import `media_kit/src/...`：
-  /// 后者是包私有实现，升级时路径可能变动，且触发 implementation_imports 告警。
-  /// 这里只做尽力而为，失败静默忽略（不影响播放主流程）。
-  static Future<void> _setMpvProperty(Player p, String key, String value) async {
-    try {
-      final platform = p.platform;
-      if (platform == null) return;
-      final dyn = platform as dynamic;
-      await dyn.setProperty(key, value);
-    } catch (_) {}
-  }
-
-  /// 测试环境（flutter test）没有 libmpv 原生库，创建 Player 会挂起并遗留定时器。
-  /// 这里在测试时短路，让 widget 测试只验证 UI 状态机，不触碰真实播放内核。
-  static bool get _isTestEnv {
-    try {
-      return Platform.environment.containsKey('FLUTTER_TEST');
-    } catch (_) {
-      return false;
-    }
+        s.contains('MediaCodecVideoRenderer');
   }
 
   Future<void> initPlayer(
@@ -240,7 +140,11 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     final sessionId = ++_initSessionId;
     watcher.dispose();
 
-    _disposePlayer();
+    final oldController = _controller;
+    _controller = null;
+    oldController?.removeListener(_onControllerUpdate);
+    try { await oldController?.pause(); } catch (_) {}
+    try { await oldController?.dispose(); } catch (_) {}
 
     if (sessionId != _initSessionId) return;
     _hasSeekedInitial = false;
@@ -253,18 +157,6 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
       _isPlaying = false;
       _playRequested = false;
       _errorText = videoUrl.trim().isNotEmpty ? '暂无可用播放地址' : '';
-      notifyListeners();
-      onStateChanged?.call();
-      return;
-    }
-
-    if (_isTestEnv) {
-      // 单元测试：不建真实内核，只把状态置为"已打开"，供 UI 断言使用。
-      _isOpening = false;
-      _isBuffering = false;
-      _isPlaying = autoPlay;
-      _playRequested = autoPlay;
-      _errorText = '';
       notifyListeners();
       onStateChanged?.call();
       return;
@@ -284,62 +176,37 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
       _handleOpenTimeout(sessionId);
     }, isOpening: true);
 
-    Player? newPlayer;
+    VideoPlayerController? newController;
     try {
-      Map<String, String>? httpHeaders;
+      final uri = Uri.parse(url);
       if (PlaybackUrl.needsServerApiAuth(url)) {
-        httpHeaders = await HttpClient.instance.mediaRequestHeaders();
+        final httpHeaders = await HttpClient.instance.mediaRequestHeaders();
+        newController = VideoPlayerController.networkUrl(uri, httpHeaders: httpHeaders);
+      } else {
+        newController = VideoPlayerController.networkUrl(uri);
       }
-
-      newPlayer = Player();
-      // 硬解优先、失败自动回落软解：libmpv 的 hwdec=auto-safe 在设备不支持
-      // 该分辨率/编码时会自己退回软解，无需应用层重试（ExoPlayer 做不到这点）。
-      // 硬解优先、失败自动回落软解：libmpv 的 hwdec=auto-safe 在设备不支持
-      // 该分辨率/编码时会自己退回软解，无需应用层重试（ExoPlayer 做不到这点）。
-      await _setMpvProperty(newPlayer, 'hwdec', 'auto-safe');
-      // 服务端 /api/hls 在 client=tv 下会把分片重写成**相对路径**的代理地址
-      // （/api/hls?source=...&token=...）。mpv 见播放列表里是相对引用就按
-      // "unsafe playlist" 拒绝加载，报：
-      //   Use the --load-unsafe-playlists option to load it anyway.
-      // 这些播放列表来自我们自己的服务端，条目也是自己生成的分片代理，
-      // 因此放开该限制是安全且必要的。
-      await _setMpvProperty(newPlayer, 'load-unsafe-playlists', 'yes');
-      // 网络抖动时多等一会，避免大分片被误判为加载失败。
-      await _setMpvProperty(newPlayer, 'network-timeout', '30');
-      final videoController = VideoController(newPlayer);
-
+      await newController.initialize();
       if (sessionId != _initSessionId) {
-        newPlayer.dispose().catchError((_) {});
+        newController.dispose().catchError((_) {});
         return;
       }
-      _player = newPlayer;
-      _videoController = videoController;
-      _bindPlayerStreams(newPlayer);
-
-      await newPlayer.open(
-        Media(url, httpHeaders: httpHeaders),
-        play: false,
-      ).timeout(
-        // 内核缺失/异常时 open 会永久挂起；超时后走失败分支，避免打开态卡死。
-        const Duration(seconds: 30),
-        onTimeout: () => throw StateError('播放内核打开超时'),
-      );
-      if (sessionId != _initSessionId) return;
 
       watcher.clearOpenWatch();
+      newController.addListener(_onControllerUpdate);
+      _controller = newController;
 
       if (initialTime > 0 && !_hasSeekedInitial) {
         _hasSeekedInitial = true;
-        await newPlayer.seek(Duration(seconds: initialTime.toInt()));
+        await newController.seekTo(Duration(seconds: initialTime.toInt()));
       }
 
-      await newPlayer.setRate(_currentSpeed);
-      await newPlayer.setVolume(muted ? 0.0 : 1.0);
+      await newController.setPlaybackSpeed(_currentSpeed);
+      await newController.setVolume(muted ? 0.0 : 1.0);
       if (autoPlay) {
-        await newPlayer.play();
+        await newController.play();
         safeSetWakelock(true);
       } else {
-        await newPlayer.pause();
+        await newController.pause();
         safeSetWakelock(false);
       }
 
@@ -347,7 +214,7 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
         _isOpening = false;
         _isBuffering = false;
         _errorText = '';
-        _totalDuration = newPlayer.state.duration;
+        _totalDuration = newController.value.duration;
         _isPlaying = autoPlay;
         _playRequested = autoPlay;
         armHideHud();
@@ -356,11 +223,9 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
       }
     } catch (e) {
       watcher.clearOpenWatch();
-      if (_player == newPlayer) _disposePlayer();
-      else newPlayer?.dispose().catchError((_) {});
-      // libmpv 已内置软解回退，同一地址无需为解码失败重试；
-      // 仅对非解码类错误（网络/初始化抖动）重试一次。
-      if (allowDecoderRetry && sessionId == _initSessionId && !_isDecoderInitError(e)) {
+      newController?.dispose().catchError((_) {});
+      if (_controller == newController) _controller = null;
+      if (allowDecoderRetry && sessionId == _initSessionId && _isDecoderInitError(e)) {
         await Future<void>.delayed(const Duration(milliseconds: 400));
         if (sessionId != _initSessionId) return;
         await initPlayer(
@@ -383,41 +248,15 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     }
   }
 
-  /// 订阅 libmpv 的状态流，把分散的 playing/buffering/position/duration
-  /// 聚合成与旧版 VideoPlayerController 等价的单点更新逻辑。
-  void _bindPlayerStreams(Player p) {
-    _playingSub = p.stream.playing.listen((_) => _onPlayerUpdate());
-    _bufferingSub = p.stream.buffering.listen((_) => _onPlayerUpdate());
-    _positionSub = p.stream.position.listen((_) => _onPlayerUpdate());
-    _durationSub = p.stream.duration.listen((_) => _onPlayerUpdate());
-    _completedSub = p.stream.completed.listen((done) {
-      if (done) _onPlayerUpdate();
-    });
-    _tracksSub = p.stream.tracks.listen(_handleTracks);
-    _errorSub = p.stream.error.listen((msg) {
-      if (msg.trim().isEmpty) return;
-      _handleInitFailure(_initSessionId, msg);
-    });
-  }
-
-  void _onPlayerUpdate() {
-    final p = _player;
-    if (p == null) return;
-    final buffering = p.state.buffering;
-    final pos = p.state.position;
-    final dur = p.state.duration;
+  void _onControllerUpdate() {
+    final c = _controller;
+    if (c == null) return;
+    final value = c.value;
+    final playing = value.isPlaying;
+    final buffering = value.isBuffering;
+    final pos = value.position;
+    final dur = value.duration;
     final completed = dur.inSeconds > 0 && pos >= dur && !buffering;
-
-    // 音轨就绪比首帧早：libmpv 一打开 http 播放列表就会发 ffmpeg 日志更新 track-list，
-    // 用这个时机把 _isOpening 放掉，否则会白等满 30s 的打开超时。
-    if (_audioTracks.isNotEmpty && _isOpening) _isOpening = false;
-    if (_audioListDirty) {
-      _audioListDirty = false;
-      notifyListeners();
-      onStateChanged?.call();
-    }
-
-    final playing = p.state.playing;
 
     if ((playing || pos > Duration.zero) && _isOpening) _isOpening = false;
     if (_isDragging || _isSeeking) {
@@ -461,7 +300,6 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     }
   }
 
-  /// 播放中播完落点或正常播放时，自动隐藏 HUD。
   void armHideHud() {
     watcher.armHide(() {
       if (_isPlaying && !_isCompleted && _panState.kind == PlayerTipKind.none && !_isDragging) {
@@ -469,57 +307,6 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
         notifyListeners();
       }
     }, canHide: _isPlaying && !_isCompleted && _errorText.isEmpty && !_isDragging);
-  }
-
-  /// 音轨列表更新（含 mpv 的 auto/no 伪轨，需过滤）。
-  void _handleTracks(Tracks tracks) {
-    final real = tracks.audio.where((t) => t.id != 'auto' && t.id != 'no').toList(growable: false);
-    final selected = _player?.state.track.audio.id ?? '';
-    final currentId = (selected == 'auto' || selected == 'no') ? '' : selected;
-
-    final changed = real.length != _audioTracks.length ||
-        (real.isNotEmpty && _audioTracks.isNotEmpty && real.first.id != _audioTracks.first.id) ||
-        currentId != _currentAudioId;
-    _audioTracks = real;
-    _currentAudioId = currentId;
-    if (changed) _audioListDirty = true;
-
-    // 兜底 C：mpv 落到 aid=no（无音轨选中）时自动纠正一次。
-    // 只纠正一次：用户之后主动选"关闭"不再被强行改回。
-    if (!_audioTrackAutoFixed && currentId.isEmpty && real.length == 1) {
-      _audioTrackAutoFixed = true;
-      selectAudioTrack(real.first.id);
-    }
-  }
-
-  /// 手动切换音轨（弹层选择）。id 为空表示不动作。
-  Future<void> selectAudioTrack(String id) async {
-    final p = _player;
-    if (p == null || id.trim().isEmpty) return;
-    AudioTrack? target;
-    for (final t in _audioTracks) {
-      if (t.id == id) {
-        target = t;
-        break;
-      }
-    }
-    if (target == null) return;
-    try {
-      await p.setAudioTrack(target);
-      _currentAudioId = target.id;
-      showTransient(PlayerPanState(kind: PlayerTipKind.volume, text: '音轨：${audioTrackLabel(target)}'));
-      notifyListeners();
-    } catch (_) {}
-  }
-
-  /// 音轨显示名：优先标题，其次语言，最后「音轨 N」。
-  String audioTrackLabel(AudioTrack t) {
-    final title = (t.title ?? '').trim();
-    if (title.isNotEmpty) return title;
-    final lang = (t.language ?? '').trim();
-    if (lang.isNotEmpty && lang != 'und') return lang;
-    final idx = _audioTracks.indexOf(t);
-    return idx >= 0 ? '音轨 ${idx + 1}' : '音轨';
   }
 
   void toggleHud() {
@@ -530,8 +317,8 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
   }
 
   void togglePlay() {
-    final c = _player;
-    if (c == null) return;
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
     if (_isCompleted) {
       seekTo(Duration.zero);
       c.play();
@@ -544,7 +331,7 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
       notifyListeners();
       return;
     }
-    if (_isPlaying || c.state.playing) {
+    if (_isPlaying || c.value.isPlaying) {
       _playRequested = false;
       c.pause();
       _safeSetWakelock(false);
@@ -563,8 +350,8 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
   }
 
   void play() {
-    final c = _player;
-    if (c == null) return;
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
     if (_isCompleted) {
       seekTo(Duration.zero);
       _isCompleted = false;
@@ -577,8 +364,8 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
   }
 
   void pause() {
-    final c = _player;
-    if (c == null) return;
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
     _playRequested = false;
     c.pause();
     _safeSetWakelock(false);
@@ -605,12 +392,16 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     _isOpening = false;
     _isCompleted = false;
     _errorText = '';
-    _disposePlayer();
+    final old = _controller;
+    _controller = null;
+    old?.removeListener(_onControllerUpdate);
+    old?.pause().catchError((_) {});
+    old?.dispose().catchError((_) {});
     notifyListeners();
   }
 
   void pauseLocal() {
-    _player?.pause().catchError((_) {});
+    _controller?.pause().catchError((_) {});
     _safeSetWakelock(false);
     _isPlaying = false;
     _playRequested = false;
@@ -625,11 +416,11 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     _playRequested = wasPlaying;
     seekTo(Duration(seconds: targetSec.toInt()));
     if (wasPlaying) {
-      _player?.play().catchError((_) {});
+      _controller?.play().catchError((_) {});
       _safeSetWakelock(true);
       _isPlaying = true;
     } else {
-      _player?.pause().catchError((_) {});
+      _controller?.pause().catchError((_) {});
       _safeSetWakelock(false);
       _isPlaying = false;
     }
@@ -642,7 +433,11 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     watcher.clearSeekWatch();
     watcher.clearHide();
     _safeSetWakelock(false);
-    _disposePlayer();
+    final old = _controller;
+    _controller = null;
+    old?.removeListener(_onControllerUpdate);
+    old?.pause().catchError((_) {});
+    old?.dispose().catchError((_) {});
     _isPlaying = false;
     _playRequested = false;
     _isBuffering = false;
@@ -655,8 +450,8 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
   }
 
   Future<void> seekTo(Duration target) async {
-    final c = _player;
-    if (c == null) return;
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
     final wasPlaying = _isPlaying || _playRequested;
     _dragPreviewPosition = null;
     _isDragging = false;
@@ -681,7 +476,7 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     notifyListeners();
 
     try {
-      await c.seek(target);
+      await c.seekTo(target);
       if (wasPlaying && _playRequested) {
         await c.play();
         _safeSetWakelock(true);
@@ -697,7 +492,7 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
 
   void setSpeed(double speed) {
     _currentSpeed = speed;
-    _player?.setRate(speed);
+    _controller?.setPlaybackSpeed(speed);
     armHideHud();
     notifyListeners();
   }
@@ -711,7 +506,7 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
   void toggleMute() {
     final next = !muted;
     setMutedInternal(next);
-    _player?.setVolume(next ? 0.0 : 1.0);
+    _controller?.setVolume(next ? 0.0 : 1.0);
     showTransient(PlayerPanState(kind: PlayerTipKind.volume, text: next ? '静音' : '音量 100%'));
   }
 
@@ -747,7 +542,10 @@ class PlayerPlaybackController extends ChangeNotifier with PlayerDeviceControlMi
     _initSessionId++;
     watcher.dispose();
     resetDeviceControl();
-    _disposePlayer();
+    final c = _controller;
+    _controller = null;
+    c?.removeListener(_onControllerUpdate);
+    c?.dispose();
     super.dispose();
   }
 }
