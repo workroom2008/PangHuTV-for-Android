@@ -35,11 +35,16 @@ class DownloadApi {
     required String mid,
     required int episode,
     String sourceId = '',
+    bool allEpisodes = false,
   }) async {
     final body = <String, dynamic>{
       'mid': mid,
       'episode': episode,
     };
+    if (allEpisodes) {
+      // 多集内容全集下载：服务端按播放列表集数展开并逐集判重
+      body['allEpisodes'] = true;
+    }
     final source = sourceId.trim();
     if (source.isNotEmpty) {
       body['source'] = source;

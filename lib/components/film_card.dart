@@ -40,9 +40,9 @@ class FilmCard extends StatelessWidget {
     }
     if (!isDownloadableFilmId(id)) return;
     try {
-      final ok = await FrontDownloadService.instance.submitEpisode(
+      // 海报卡下载=全集（多集内容服务端按播放列表展开并逐集判重；单集片等价 ep1）
+      final ok = await FrontDownloadService.instance.submitAllEpisodes(
         id,
-        1,
         sourceId: film.sourceId,
       );
       if (!context.mounted) return;

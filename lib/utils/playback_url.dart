@@ -63,6 +63,7 @@ class PlaybackUrl {
     'sihu:',
     'av18:',
     'xporn:',
+    '2048:',
     'ck69:',
     'av591:',
   ];
