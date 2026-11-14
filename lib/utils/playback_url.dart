@@ -64,6 +64,7 @@ class PlaybackUrl {
     'av18:',
     'xporn:',
     '2048:',
+    'qm:',
     'ck69:',
     'av591:',
   ];
