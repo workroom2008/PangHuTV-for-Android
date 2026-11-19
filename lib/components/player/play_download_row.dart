@@ -6,17 +6,21 @@ import '../../models/download_models.dart';
 import '../../services/auth_session.dart';
 import '../../services/front_download_service.dart';
 
-/// 播放页「下载当前集」，对齐 Web 播放页 download 行。
+/// 播放页「下载当前集/下载全集」，对齐 Web 播放页 download 行。
 class PlayDownloadRow extends StatefulWidget {
   final String filmId;
   final int episodeNo;
   final String collectSourceId;
+
+  /// 多集内容（播放列表 >1 集）时提交全集下载，服务端按播放列表展开并逐集判重。
+  final bool multiEpisode;
 
   const PlayDownloadRow({
     super.key,
     required this.filmId,
     required this.episodeNo,
     this.collectSourceId = '',
+    this.multiEpisode = false,
   });
 
   @override
@@ -133,6 +137,7 @@ class _PlayDownloadRowState extends State<PlayDownloadRow> {
         mid: widget.filmId,
         episode: widget.episodeNo,
         sourceId: widget.collectSourceId,
+        allEpisodes: widget.multiEpisode,
       );
       if (!mounted) return;
       if (res.code == 0) {
@@ -182,7 +187,9 @@ class _PlayDownloadRowState extends State<PlayDownloadRow> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.cloud_download_outlined, size: 20),
-              label: Text(_submitting ? '提交中...' : '下载当前集'),
+              label: Text(_submitting
+                  ? '提交中...'
+                  : (widget.multiEpisode ? '下载全集' : '下载当前集')),
               style: TextButton.styleFrom(
                 foregroundColor: AppTheme.textPrimary,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

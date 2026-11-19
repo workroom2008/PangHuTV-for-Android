@@ -492,6 +492,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
       );
     }
 
+    final downloadSrc = _findSource(_playingSourceId);
     return LivePlayBody(
       isSplit: split,
       playerWidget: _buildVideoPlayer(
@@ -533,6 +534,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
         filmId: _filmId,
         episodeNo: _episodeIndex + 1,
         collectSourceId: _downloadCollectSourceId(),
+        multiEpisode: downloadSrc != null && downloadSrc.linkList.length > 1,
       ),
     );
   }
